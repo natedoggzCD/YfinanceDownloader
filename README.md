@@ -1,43 +1,24 @@
-# YfinanceDownloader
+<div align="center">
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![yfinance](https://img.shields.io/badge/data-Yahoo%20Finance-purple.svg)](https://pypi.org/project/yfinance/)
+# 📈 YfinanceDownloader
 
-> **Bulk-download daily & hourly OHLCV stock data for every NASDAQ-listed ticker — filtered by price range, kept in sync, and ready for analysis.**
+**Bulk-download daily & hourly OHLCV stock data for every NASDAQ-listed ticker.**
 
-A command-line Python tool that downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for all stocks on the NASDAQ exchange. It maintains a local CSV database of daily and hourly prices that stays automatically synchronized with current NASDAQ listings — new IPOs get added, delisted stocks get removed, and your data stays up to date with a single command.
+Filtered by price range · Incrementally updated · Synced with current listings · Ready for analysis
 
----
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+[![yfinance](https://img.shields.io/badge/data_source-Yahoo_Finance-7B1FA2?style=for-the-badge)](https://pypi.org/project/yfinance/)
 
-## Why Use This?
-
-| Problem | Solution |
-|---|---|
-| Manually downloading price data for hundreds of stocks | One command downloads **all** NASDAQ stocks in your price range |
-| Data goes stale after a few days | `--update` fetches only new rows since your last download |
-| Companies get delisted or change tickers | `--reconcile` syncs your dataset with the latest NASDAQ screener |
-| API rate limits cause failures | Built-in batching & pauses keep downloads reliable |
-| Need both daily and intraday data | Downloads **daily** and **hourly** OHLCV in parallel |
+</div>
 
 ---
 
-## Features
-
-- **Bulk OHLCV Downloads** — Daily & hourly candlestick data for 1,000+ stocks at once
-- **Price Range Filtering** — Only download stocks within a configurable price range (default: $2–$200)
-- **Smart Reconciliation** — Automatically adds new IPOs and removes delisted tickers
-- **Incremental Updates** — Appends only new data since your last download (no re-downloading)
-- **Rate Limiting** — Built-in batching and pauses to respect Yahoo Finance's API
-- **Dry Run Mode** — Preview every change before committing
-- **Ticker Filtering** — Excludes warrants, options, and other non-standard symbols
-- **Clean CSV Output** — Ready to load into pandas, R, Excel, or any analysis tool
+A command-line Python tool that downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for all stocks on the NASDAQ exchange. It maintains local CSV files of daily and hourly prices that stay automatically synchronized with current NASDAQ listings — new IPOs get added, delisted stocks get removed, and your data stays up to date with a single command or a double-click of `daily.bat`.
 
 ---
 
-## Quick Start
-
-### 1. Install
+## ⚡ Quick Start
 
 ```bash
 git clone https://github.com/natedoggzCD/YfinanceDownloader.git
@@ -45,138 +26,157 @@ cd YfinanceDownloader
 pip install -r requirements.txt
 ```
 
-### 2. Get the NASDAQ Screener
-
-1. Go to https://www.nasdaq.com/market-activity/stocks/screener
-2. Click **Download CSV**
-3. Save as `nasdaq_screener.csv` in the project folder
-
-### 3. Download Everything
+1. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
+2. Run the initial download:
 
 ```bash
 python downloader.py --init
 ```
 
-That's it — you'll have `prices_daily.csv` and `prices_hourly.csv` with OHLCV data for every qualifying stock.
+That's it — `prices_daily.csv` and `prices_hourly.csv` will be created with OHLCV data for every qualifying stock.
 
-### 4. Keep It Updated
+> **Note:** Initial download of 1,000+ stocks takes several hours due to rate limiting.
+
+---
+
+## 🔄 Daily Updates
+
+The easiest way to keep your data current:
+
+### Option A — Double-click the batch file (Windows)
+
+Just double-click **`daily.bat`**. It runs `--update` automatically and pulls the latest bars into your CSVs.
+
+### Option B — Command line
 
 ```bash
-# Fetch the latest bars since your last download
 python downloader.py --update
+```
 
-# Sync with current NASDAQ listings (add new IPOs, drop delisted)
-python downloader.py --reconcile
+### Option C — Full maintenance
 
-# Or do everything at once
+```bash
+# Sync listings + update data in one shot
 python downloader.py --all
 ```
 
 ---
 
-## Usage
+## 🛠️ All Commands
 
-```
-python downloader.py [OPTIONS]
-
-Options:
-  --init        Initial download of all NASDAQ stocks in your price range
-  --update      Append new data since the last download
-  --reconcile   Sync tickers with the current NASDAQ screener
-  --all         Run reconcile + update (+ init if no data exists)
-  --dry-run     Preview changes without downloading anything
-  --tickers     Process only specific tickers (e.g. --tickers AAPL MSFT TSLA)
-```
+| Command | What it does |
+|---------|-------------|
+| `python downloader.py --init` | First-time download of all NASDAQ stocks in your price range |
+| `python downloader.py --update` | Append new bars since the last download |
+| `python downloader.py --reconcile` | Add new IPOs, remove delisted tickers from your CSVs |
+| `python downloader.py --all` | Reconcile + update (+ init if no data exists yet) |
+| `python downloader.py --dry-run` | Preview changes without downloading anything |
+| `python downloader.py --tickers AAPL MSFT` | Process only specific tickers |
+| **`daily.bat`** | **One-click wrapper** — runs `--update` (Windows) |
 
 ### Examples
 
 ```bash
-# First-time setup — download everything
-python downloader.py --init
-
-# Daily maintenance — grab new bars
-python downloader.py --update
-
-# Weekly maintenance — sync listings + update
-python downloader.py --all
-
-# Preview what would change
+# Preview what would change before committing
 python downloader.py --all --dry-run
 
 # Update only specific stocks
 python downloader.py --update --tickers AAPL MSFT GOOGL AMZN TSLA
+
+# Weekly maintenance — sync NASDAQ listings + pull new data
+python downloader.py --all
 ```
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
-All settings live in [`config.py`](config.py):
+All settings live in [`config.py`](config.py) — edit to match your needs:
+
+```python
+# Price range filter
+MIN_PRICE = 2.0          # Minimum stock price ($)
+MAX_PRICE = 200.0        # Maximum stock price ($)
+
+# How far back to download
+START_DATE = "2018-01-02"
+END_DATE = None           # None = today
+
+# Output files
+DAILY_CSV = "prices_daily.csv"
+HOURLY_CSV = "prices_hourly.csv"
+```
+
+<details>
+<summary><b>All configuration options</b></summary>
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `MIN_PRICE` | `2.0` | Minimum stock price to include ($) |
 | `MAX_PRICE` | `200.0` | Maximum stock price to include ($) |
-| `START_DATE` | `"2018-01-02"` | How far back to download daily data |
+| `START_DATE` | `"2018-01-02"` | Earliest date for daily data |
 | `END_DATE` | `None` | End date (`None` = today) |
-| `DAILY_CSV` | `"prices_daily.csv"` | Output file for daily OHLCV |
-| `HOURLY_CSV` | `"prices_hourly.csv"` | Output file for hourly OHLCV |
-| `BATCH_SIZE` | `50` | Tickers per download batch |
+| `DAILY_CSV` | `"prices_daily.csv"` | Daily OHLCV output file |
+| `HOURLY_CSV` | `"prices_hourly.csv"` | Hourly OHLCV output file |
+| `BATCH_SIZE` | `50` | Tickers downloaded per batch |
 | `PAUSE_AFTER_BATCHES` | `500` | API calls before pausing |
-| `PAUSE_DURATION_SECONDS` | `60` | Pause duration in seconds |
+| `PAUSE_DURATION_SECONDS` | `60` | Pause duration (seconds) |
 
-**Example — Penny Stocks:**
+</details>
+
+<details>
+<summary><b>Example: Penny stocks only</b></summary>
+
 ```python
 MIN_PRICE = 0.5
 MAX_PRICE = 5.0
 START_DATE = "2020-01-01"
 ```
+</details>
 
-**Example — Large Caps:**
+<details>
+<summary><b>Example: Large caps only</b></summary>
+
 ```python
 MIN_PRICE = 50.0
 MAX_PRICE = 500.0
 START_DATE = "2015-01-01"
 ```
+</details>
 
 ---
 
-## Output Data Format
+## 📊 Output Format
 
 ### `prices_daily.csv`
 
-| Column | Description |
-|--------|-------------|
-| ticker | Stock symbol |
-| interval | `daily` |
-| Date | Trading date (`YYYY-MM-DD`) |
-| Adj Close | Adjusted closing price |
-| Close | Raw closing price |
-| High | Intraday high |
-| Low | Intraday low |
-| Open | Opening price |
-| Volume | Shares traded |
-
-```csv
-ticker,interval,Date,Adj Close,Close,High,Low,Open,Volume
-AAPL,daily,2020-01-02,74.095,74.39,75.145,73.85,74.06,135480400
-AAPL,daily,2020-01-03,73.425,73.44,74.98,73.19,74.29,146322800
+```
+ticker, interval, Date,       Adj Close, Close, High,   Low,   Open,  Volume
+AAPL,   daily,    2020-01-02, 74.095,    74.39, 75.145, 73.85, 74.06, 135480400
+AAPL,   daily,    2020-01-03, 73.425,    73.44, 74.98,  73.19, 74.29, 146322800
 ```
 
 ### `prices_hourly.csv`
 
-Same columns as daily, but with `Datetime` (UTC, ISO 8601) instead of `Date`:
-
-```csv
-ticker,interval,Datetime,Adj Close,Close,High,Low,Open,Volume
-AAPL,hourly,2023-11-13 14:30:00+00:00,190.5,190.5,191.2,189.8,190.1,12500000
 ```
+ticker, interval, Datetime,                   Adj Close, Close, High,  Low,   Open,  Volume
+AAPL,   hourly,   2023-11-13 14:30:00+00:00,  190.5,     190.5, 191.2, 189.8, 190.1, 12500000
+```
+
+| Column | Description |
+|--------|-------------|
+| `ticker` | Stock symbol (e.g. `AAPL`) |
+| `interval` | `daily` or `hourly` |
+| `Date` / `Datetime` | Trading date or UTC timestamp |
+| `Open` `High` `Low` `Close` | Standard OHLC prices |
+| `Adj Close` | Split/dividend-adjusted close |
+| `Volume` | Shares traded |
 
 > **Note:** Hourly data is limited to the last ~700 days due to Yahoo Finance API restrictions.
 
 ---
 
-## How Reconciliation Works
+## 🔁 How Reconciliation Works
 
 ```
 NASDAQ Screener ──► Filter by price range ──► Compare with local CSVs
@@ -187,33 +187,22 @@ NASDAQ Screener ──► Filter by price range ──► Compare with local CSV
                                      (download)           (remove rows)
 ```
 
-1. Loads the latest `nasdaq_screener.csv` and filters by your price range
+1. Loads `nasdaq_screener.csv` and filters by your price range
 2. Compares against tickers already in your CSV files
 3. **Removes** rows for delisted / renamed / out-of-range stocks
 4. **Downloads** full history for any new additions
 
-Run `--reconcile` weekly to keep your dataset current.
+> **Tip:** Run `--reconcile` weekly to keep your dataset current with new IPOs and delistings.
 
 ---
 
-## Rate Limiting
-
-The tool is designed to be respectful to Yahoo Finance's API:
-
-- Downloads in batches of 50 tickers
-- Pauses for 60 seconds after every 500 API calls
-- Uses single-threaded downloads
-
-> **Do not disable rate limiting** — aggressive downloading will likely result in IP blocking.
-
----
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 YfinanceDownloader/
-├── downloader.py        # Main script — all download/update/reconcile logic
-├── config.py            # User-configurable settings
+├── downloader.py        # Core script — download, update, reconcile
+├── config.py            # All user-configurable settings
+├── daily.bat            # One-click daily update (Windows)
 ├── nasdaq_screener.csv  # NASDAQ stock listing (you download this)
 ├── requirements.txt     # Python dependencies
 ├── EXAMPLES.md          # Additional usage examples
@@ -223,27 +212,30 @@ YfinanceDownloader/
 
 ---
 
-## Requirements
+## 🚦 Rate Limiting
 
-- **Python** 3.8+
-- **pandas** >= 1.5.0
-- **yfinance** >= 0.2.0
-- **numpy** >= 1.21.0
+The tool respects Yahoo Finance's API with built-in safeguards:
+
+- Downloads in batches of **50 tickers**
+- Pauses **60 seconds** after every **500 API calls**
+- Single-threaded to avoid triggering blocks
+
+> ⚠️ **Do not disable rate limiting** — aggressive downloading will result in IP blocking.
 
 ---
 
-## Troubleshooting
+## ❓ Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
 | `NASDAQ screener file not found` | Download it from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) |
-| No data returned for a ticker | The stock may be delisted or have no trading history — it will be skipped |
+| No data returned for a ticker | Stock may be delisted or have no history — it gets skipped automatically |
 | Rate limit / connection errors | Increase `PAUSE_DURATION_SECONDS` in `config.py` |
 | Column mismatch after yfinance update | Check `format_daily_data()` / `format_hourly_data()` column mappings |
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
 Pull requests are welcome! Please ensure:
 - Code follows the existing style
@@ -252,12 +244,16 @@ Pull requests are welcome! Please ensure:
 
 ---
 
-## License
+## 📄 License
 
 [MIT](LICENSE) — free to use, modify, and distribute.
 
 ---
 
-## Disclaimer
+<div align="center">
 
-This tool is for **educational and research purposes**. Stock data is sourced from Yahoo Finance via the [`yfinance`](https://pypi.org/project/yfinance/) library. Always verify data accuracy before making financial decisions. Please respect Yahoo Finance's terms of service.
+**Built with** [yfinance](https://pypi.org/project/yfinance/) **·** Data sourced from Yahoo Finance
+
+*For educational and research purposes. Always verify data accuracy before making financial decisions.*
+
+</div>
