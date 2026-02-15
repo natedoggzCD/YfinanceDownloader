@@ -30,7 +30,8 @@ MIN_OBSERVATIONS = 100
 
 # Yahoo Finance hourly data limit (days)
 # yfinance only provides hourly data for approximately the last 730 days (~2 years)
-HOURLY_MAX_DAYS = 730
+# Using 729 to stay safely within the boundary Yahoo enforces
+HOURLY_MAX_DAYS = 729
 
 # Gap detection threshold (days)
 # Stocks with data gaps larger than this will be flagged
