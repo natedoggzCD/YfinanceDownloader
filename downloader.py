@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import logging
 import re
 import sys
 import time
@@ -174,23 +175,36 @@ def get_csv_info(csv_path: Path) -> Tuple[List[str], datetime, datetime]:
 def download_ticker_data(
     ticker: str, start: datetime, end: datetime, interval: str
 ) -> Optional[pd.DataFrame]:
-    """Download historical price data for a single ticker with retry logic."""
+    """Download historical price data for a single ticker with retry logic.
+
+    Returns None when no data is available (e.g. weekends, holidays).
+    Only retries on actual exceptions, not on empty results.
+    """
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            data = yf.download(
-                tickers=ticker,
-                interval=interval,
-                start=start,
-                end=end + timedelta(days=1),
-                progress=False,
-                auto_adjust=False,
-                actions=False,
-                prepost=False,
-                threads=False,
-            )
+            # Suppress yfinance's noisy "Failed download" messages
+            # (they trigger on weekends/holidays when no data exists — not real errors)
+            yf_logger = logging.getLogger("yfinance")
+            prev_level = yf_logger.level
+            yf_logger.setLevel(logging.CRITICAL)
+            try:
+                data = yf.download(
+                    tickers=ticker,
+                    interval=interval,
+                    start=start,
+                    end=end + timedelta(days=1),
+                    progress=False,
+                    auto_adjust=False,
+                    actions=False,
+                    prepost=False,
+                    threads=False,
+                )
+            finally:
+                yf_logger.setLevel(prev_level)
 
             if data.empty:
+                # Empty result is normal (weekends, holidays, delisted, etc.) — do NOT retry
                 return None
 
             df = data.reset_index()
@@ -513,7 +527,6 @@ def update_data(
 
     request_count = 0
     total_added = 0
-    failed_tickers = []
 
     for batch_idx, batch in enumerate(_chunked(tickers_to_update, BATCH_SIZE), 1):
         print(f"  Batch {batch_idx}: Processing {len(batch)} tickers...")
@@ -551,8 +564,7 @@ def update_data(
                             cfg.csv_path, mode="a", header=False, index=False
                         )
                         total_added += len(formatted)
-            else:
-                failed_tickers.append(ticker)
+            # Empty result is normal (weekends, holidays) — not a failure
 
             request_count += 1
 
@@ -563,8 +575,6 @@ def update_data(
             request_count = 0
 
     print(f"  Added {total_added} new rows")
-    if failed_tickers:
-        print(f"  Failed to update {len(failed_tickers)} tickers: {', '.join(failed_tickers[:20])}")
     if stale_tickers:
         print(f"  Stale tickers skipped: {', '.join(stale_tickers[:20])}")
         if len(stale_tickers) > 20:
