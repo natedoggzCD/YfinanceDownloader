@@ -45,7 +45,7 @@ The easiest way to keep your data current:
 
 ### Option A — Double-click the batch file (Windows)
 
-Just double-click **`daily.bat`**. It runs `--update` automatically and pulls the latest bars into your CSVs.
+Just double-click **`daily.bat`**. It runs `--all` automatically — initializes data if needed, syncs with the latest NASDAQ listings, and pulls the latest bars into your CSVs.
 
 ### Option B — Command line
 
@@ -72,7 +72,7 @@ python downloader.py --all
 | `python downloader.py --all` | Reconcile + update (+ init if no data exists yet) |
 | `python downloader.py --dry-run` | Preview changes without downloading anything |
 | `python downloader.py --tickers AAPL MSFT` | Process only specific tickers |
-| **`daily.bat`** | **One-click wrapper** — runs `--update` (Windows) |
+| **`daily.bat`** | **One-click wrapper** — runs `--all` (Windows) |
 
 ### Examples
 

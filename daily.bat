@@ -11,7 +11,7 @@ echo ============================================================
 echo.
 
 cd /d "%~dp0"
-python downloader.py --update
+python downloader.py --all
 
 echo.
 echo ============================================================
