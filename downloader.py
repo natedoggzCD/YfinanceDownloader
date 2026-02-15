@@ -19,7 +19,7 @@ import argparse
 import re
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 from dataclasses import dataclass
@@ -505,7 +505,10 @@ def update_data(
         print("  [DRY RUN] No updates will be made")
         return
 
-    end_time = datetime.now() + cfg.end_pad
+    if cfg.tz_aware:
+        end_time = datetime.now(tz=timezone.utc) + cfg.end_pad
+    else:
+        end_time = datetime.now() + cfg.end_pad
     headers = pd.read_csv(cfg.csv_path, nrows=0).columns.tolist()
 
     request_count = 0

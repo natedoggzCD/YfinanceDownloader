@@ -3,7 +3,7 @@
 
 # Stock price range filter (in USD)
 # Only stocks within this price range will be included
-MIN_PRICE = 2.0
+MIN_PRICE = 150.0
 MAX_PRICE = 200.0
 
 # Date range for historical data downloads
