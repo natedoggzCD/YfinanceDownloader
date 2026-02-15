@@ -27,38 +27,28 @@ pip install -r requirements.txt
 ```
 
 1. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
-2. Run the initial download:
+2. **Double-click `daily.bat`** (Windows) — or run `python downloader.py --all` from a terminal.
 
-```bash
-python downloader.py --init
-```
+That's it. On the first run it downloads all historical data; on every run after that it only fetches new bars. The output files `prices_daily.csv` and `prices_hourly.csv` are created automatically.
 
-That's it — `prices_daily.csv` and `prices_hourly.csv` will be created with OHLCV data for every qualifying stock.
-
-> **Note:** Initial download of 1,000+ stocks takes several hours due to rate limiting.
+> **Note:** The first run downloads 1,000+ stocks and takes several hours due to rate limiting. Every run after that is fast.
 
 ---
 
-## 🔄 Daily Updates
+## 🔄 Keeping Data Updated
 
-The easiest way to keep your data current:
+| Method | How | Best for |
+|--------|-----|----------|
+| **`daily.bat`** | Double-click the file | Easiest — no terminal needed (Windows) |
+| `python downloader.py --all` | Run from terminal | Cross-platform, same as daily.bat |
+| `python downloader.py --update` | Run from terminal | Quick update only (skip reconciliation) |
 
-### Option A — Double-click the batch file (Windows)
+`daily.bat` runs `python downloader.py --all` under the hood, which:
+1. **Initializes** data if no CSVs exist yet (first run)
+2. **Reconciles** tickers with the NASDAQ screener (adds new IPOs, removes delisted)
+3. **Updates** your CSVs with the latest price bars
 
-Just double-click **`daily.bat`**. It runs `--all` automatically — initializes data if needed, syncs with the latest NASDAQ listings, and pulls the latest bars into your CSVs.
-
-### Option B — Command line
-
-```bash
-python downloader.py --update
-```
-
-### Option C — Full maintenance
-
-```bash
-# Sync listings + update data in one shot
-python downloader.py --all
-```
+Just double-click it daily and your data stays current.
 
 ---
 
