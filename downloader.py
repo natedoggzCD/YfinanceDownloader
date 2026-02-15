@@ -9,7 +9,10 @@ Usage:
     python downloader.py --init          # Initial download of all stocks
     python downloader.py --update        # Update existing data files
     python downloader.py --reconcile     # Reconcile stocks with NASDAQ screener
+    python downloader.py --all           # Reconcile + update (+ init if needed)
     python downloader.py --dry-run       # Preview changes without downloading
+
+    daily.bat                            # One-click: runs --all (Windows)
 """
 
 import argparse
