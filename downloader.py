@@ -72,6 +72,125 @@ class TargetConfig:
 # ============================================================================
 
 
+# US stock market holidays (fixed-date and observed rules)
+# Covers: New Year's, MLK Day, Presidents' Day, Good Friday,
+#          Memorial Day, Juneteenth, Independence Day, Labor Day,
+#          Thanksgiving, Christmas
+def _us_market_holidays(year: int) -> set:
+    """Return a set of date objects for US stock market holidays in the given year."""
+    from datetime import date
+    import calendar
+
+    holidays = set()
+
+    # --- Fixed-date holidays (with Sat→Fri / Sun→Mon observation rules) ---
+    def _observed(month: int, day: int) -> date:
+        d = date(year, month, day)
+        if d.weekday() == 5:      # Saturday → observe Friday
+            return d - timedelta(days=1)
+        elif d.weekday() == 6:    # Sunday → observe Monday
+            return d + timedelta(days=1)
+        return d
+
+    holidays.add(_observed(1, 1))    # New Year's Day
+    holidays.add(_observed(6, 19))   # Juneteenth
+    holidays.add(_observed(7, 4))    # Independence Day
+    holidays.add(_observed(12, 25))  # Christmas Day
+
+    # --- Nth-weekday holidays ---
+    def _nth_weekday(month: int, weekday: int, n: int) -> date:
+        """Return the nth occurrence of weekday in month (1-indexed)."""
+        cal = calendar.monthcalendar(year, month)
+        count = 0
+        for week in cal:
+            if week[weekday] != 0:
+                count += 1
+                if count == n:
+                    return date(year, month, week[weekday])
+        raise ValueError(f"Could not find occurrence {n} of weekday {weekday} in {year}-{month}")
+
+    def _last_weekday(month: int, weekday: int) -> date:
+        """Return the last occurrence of weekday in month."""
+        cal = calendar.monthcalendar(year, month)
+        for week in reversed(cal):
+            if week[weekday] != 0:
+                return date(year, month, week[weekday])
+        raise ValueError(f"Could not find last weekday {weekday} in {year}-{month}")
+
+    holidays.add(_nth_weekday(1, calendar.MONDAY, 3))    # MLK Day (3rd Mon Jan)
+    holidays.add(_nth_weekday(2, calendar.MONDAY, 3))    # Presidents' Day (3rd Mon Feb)
+    holidays.add(_last_weekday(5, calendar.MONDAY))      # Memorial Day (last Mon May)
+    holidays.add(_nth_weekday(9, calendar.MONDAY, 1))    # Labor Day (1st Mon Sep)
+    holidays.add(_nth_weekday(11, calendar.THURSDAY, 4)) # Thanksgiving (4th Thu Nov)
+
+    # --- Good Friday (2 days before Easter Sunday) ---
+    # Anonymous Gregorian algorithm
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    easter = date(year, month, day)
+    holidays.add(easter - timedelta(days=2))  # Good Friday
+
+    return holidays
+
+
+def is_market_open_day(d) -> bool:
+    """Check if a given date is a US stock market trading day."""
+    from datetime import date as date_type
+    if isinstance(d, datetime):
+        d = d.date()
+    if not isinstance(d, date_type):
+        d = pd.Timestamp(d).date()
+    # Weekends
+    if d.weekday() >= 5:
+        return False
+    # Holidays
+    if d in _us_market_holidays(d.year):
+        return False
+    return True
+
+
+def last_trading_day(reference: Optional[datetime] = None) -> datetime:
+    """Return the most recent completed trading day as of the reference datetime.
+
+    If reference is during market hours on a trading day, returns the
+    *previous* trading day (since today's data isn't complete yet).
+    """
+    from datetime import date as date_type
+
+    if reference is None:
+        reference = datetime.now(tz=timezone.utc)
+
+    # Work in naive dates for calendar logic
+    ref_date = reference.date() if isinstance(reference, datetime) else reference
+
+    # If it's currently a trading day but before market close (20:00 UTC / 4pm ET),
+    # the current day's data isn't complete yet, so go back one more day
+    if isinstance(reference, datetime):
+        ref_hour = reference.hour if reference.tzinfo is None else reference.astimezone(timezone.utc).hour
+        if is_market_open_day(ref_date) and ref_hour < 21:
+            # Market hasn't fully closed yet (adding 1hr buffer past 20:00 close)
+            ref_date = ref_date - timedelta(days=1)
+
+    # Walk backwards to find the last trading day
+    d = ref_date
+    while not is_market_open_day(d):
+        d = d - timedelta(days=1)
+
+    return datetime(d.year, d.month, d.day)
+
+
 def parse_price(price_str: str) -> Optional[float]:
     """Parse price from string like '$125.81' to float."""
     if pd.isna(price_str) or price_str == "" or str(price_str).strip() == "":
@@ -486,6 +605,16 @@ def update_data(
         print(f"  ERROR: {cfg.csv_path} does not exist. Run --init first.")
         return
 
+    # Check if there's any point updating — is there a new trading day?
+    last_trade = last_trading_day()
+    now_utc = datetime.now(tz=timezone.utc)
+    print(f"  Last completed trading day: {last_trade.strftime('%Y-%m-%d')} ({last_trade.strftime('%A')})")
+    if not is_market_open_day(now_utc.date()):
+        next_open = now_utc.date()
+        while not is_market_open_day(next_open):
+            next_open += timedelta(days=1)
+        print(f"  Market is closed today ({now_utc.strftime('%A')}). Next open: {next_open.strftime('%Y-%m-%d')} ({next_open.strftime('%A')})")
+
     # Get latest timestamps
     latest_by_ticker = load_latest_per_ticker(cfg.csv_path, cfg.time_col)
 
@@ -498,22 +627,39 @@ def update_data(
     now = datetime.now()
     stale_cutoff = now - timedelta(days=STALE_TICKER_DAYS)
     stale_tickers = []
+    already_current = []
     active_tickers = []
+    last_trade_date = last_trade.date()
+
     for t in tickers_to_update:
         last_seen = latest_by_ticker.get(t.upper())
         if last_seen is not None:
-            # Strip timezone info for comparison if needed
+            # Strip timezone info for comparison
             last_seen_naive = last_seen.replace(tzinfo=None) if last_seen.tzinfo else last_seen
+            last_seen_date = last_seen_naive.date() if isinstance(last_seen_naive, datetime) else last_seen_naive
+
+            # Skip if already has data from the last trading day
+            if last_seen_date >= last_trade_date:
+                already_current.append(t)
+                continue
+
+            # Skip if stale (no data in > STALE_TICKER_DAYS)
             if last_seen_naive < stale_cutoff:
                 stale_tickers.append(t)
                 continue
         active_tickers.append(t)
     tickers_to_update = active_tickers
 
+    if already_current:
+        print(f"  Already current: {len(already_current)} tickers (data through {last_trade_date})")
     if stale_tickers:
         print(f"  Auto-skipped {len(stale_tickers)} stale tickers (no data in >{STALE_TICKER_DAYS} days)")
 
     print(f"  Tickers to update: {len(tickers_to_update)}")
+
+    if not tickers_to_update:
+        print(f"  Nothing to update — all tickers are current through {last_trade_date}.")
+        return
 
     if dry_run:
         print("  [DRY RUN] No updates will be made")
