@@ -295,7 +295,7 @@ def load_daily_data(file_path):
 
 def generate_features(
     daily_path="prices_daily.csv",
-    output_path="daily_features.h5",
+    output_path="daily_features.parquet",
     min_obs=100,
     stale_days=None,
 ):
@@ -398,15 +398,12 @@ def generate_features(
     if features_df.empty:
         raise RuntimeError("Dropping NaNs produced an empty feature dataset.")
 
-    # Save with data_columns for efficient queries and better compression
-    features_df.to_hdf(
+    # Save as Parquet with good compression
+    features_df.to_parquet(
         output_path,
-        key="data",
-        mode="w",
-        format="table",
-        data_columns=["ticker", "Date"],
-        complevel=9,
-        complib="blosc",
+        engine="pyarrow",
+        compression="snappy",
+        index=False,
     )
     print(
         f"\nFeatures computed for {features_df['ticker'].nunique()} tickers. "
@@ -455,7 +452,7 @@ def main():
         epilog="""
 Examples:
   python generate.py
-  python generate.py --input prices_daily.csv --output daily_features.h5
+  python generate.py --input prices_daily.csv --output daily_features.parquet
   python generate.py --min-obs 252 --stale-days 5
         """,
     )
@@ -466,8 +463,8 @@ Examples:
     )
     parser.add_argument(
         "--output",
-        default="daily_features.h5",
-        help="Path for output HDF5 file (default: daily_features.h5)",
+        default="daily_features.parquet",
+        help="Path for output Parquet file (default: daily_features.parquet)",
     )
     parser.add_argument(
         "--min-obs",

@@ -67,7 +67,7 @@ Just double-click it daily and your data stays current.
 | `python downloader.py --all` | Reconcile + update (+ init if no data exists yet) |
 | `python downloader.py --dry-run` | Preview changes without downloading anything |
 | `python downloader.py --tickers AAPL MSFT` | Process only specific tickers |
-| `python generate.py` | Generate technical features → `daily_features.h5` |
+| `python generate.py` | Generate technical features → `daily_features.parquet` |
 | **`daily.bat`** | **One-click wrapper** — runs `--all` (Windows) |
 | **`generate.bat`** | **One-click wrapper** — runs `generate.py` (Windows) |
 
@@ -206,7 +206,7 @@ NASDAQ Screener ──► Filter by price range ──► Compare with local CSV
 ```
 YfinanceDownloader/
 ├── downloader.py        # Core script — download, update, reconcile
-├── generate.py          # Feature engineering → daily_features.h5
+├── generate.py          # Feature engineering → daily_features.parquet
 ├── config.example.py    # Configuration template (copy to config.py)
 ├── config.py            # Your local settings (gitignored)
 ├── daily.bat            # One-click daily update (Windows)
@@ -233,7 +233,7 @@ generate.bat
 ### Options
 
 ```bash
-python generate.py --input prices_daily.csv --output daily_features.h5
+python generate.py --input prices_daily.csv --output daily_features.parquet
 python generate.py --min-obs 252        # Require 1 year of history per ticker
 python generate.py --stale-days 5       # Skip tickers with no recent data
 ```
@@ -251,19 +251,19 @@ python generate.py --stale-days 5       # Skip tickers with no recent data
 | **Lag Features** | Close, Volume, ATR, RSI lagged 1–5 days |
 | **Rolling Stats** | Rolling mean & std (5, 10, 20 day) for Close, Volume, ATR |
 
-### Output: `daily_features.h5`
+### Output: `daily_features.parquet`
 
-Compressed HDF5 file with `ticker` and `Date` as indexed data columns for fast queries:
+Compressed Parquet file optimized for columnar queries:
 
 ```python
 import pandas as pd
-df = pd.read_hdf("daily_features.h5", key="data")
+df = pd.read_parquet("daily_features.parquet")
 
 # Query a single ticker
-aapl = pd.read_hdf("daily_features.h5", key="data", where="ticker='AAPL'")
+aapl = df[df['ticker'] == 'AAPL']
 ```
 
-> **Note:** Requires `tables` (PyTables) and `blosc2` — both included in `requirements.txt`.
+> **Note:** Requires `pyarrow` — included in `requirements.txt`.
 
 ---
 

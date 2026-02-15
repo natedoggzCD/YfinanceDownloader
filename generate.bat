@@ -1,12 +1,12 @@
 @echo off
 :: ============================================================
-::  generate.bat — One-click feature engineering
-::  Double-click this file to generate daily_features.h5
+::  generate.bat - One-click feature engineering
+::  Double-click this file to generate daily_features.parquet
 ::  from your prices_daily.csv data.
 :: ============================================================
 
 echo ============================================================
-echo  YfinanceDownloader — Feature Generation
+echo  YfinanceDownloader - Feature Generation
 echo ============================================================
 echo.
 
