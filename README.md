@@ -44,6 +44,7 @@ That's it. On the first run it downloads all historical data; on every run after
 | Method | How | Best for |
 |--------|-----|----------|
 | **`daily.bat`** | Double-click the file | Easiest — no terminal needed (Windows) |
+| **`generate.bat`** | Double-click the file | Generate features after updating (Windows) |
 | `python downloader.py --all` | Run from terminal | Cross-platform, same as daily.bat |
 | `python downloader.py --update` | Run from terminal | Quick update only (skip reconciliation) |
 
@@ -68,6 +69,7 @@ Just double-click it daily and your data stays current.
 | `python downloader.py --tickers AAPL MSFT` | Process only specific tickers |
 | `python generate.py` | Generate technical features → `daily_features.h5` |
 | **`daily.bat`** | **One-click wrapper** — runs `--all` (Windows) |
+| **`generate.bat`** | **One-click wrapper** — runs `generate.py` (Windows) |
 
 ### Examples
 
@@ -208,6 +210,7 @@ YfinanceDownloader/
 ├── config.example.py    # Configuration template (copy to config.py)
 ├── config.py            # Your local settings (gitignored)
 ├── daily.bat            # One-click daily update (Windows)
+├── generate.bat         # One-click feature generation (Windows)
 ├── nasdaq_screener.csv  # NASDAQ stock listing (you download this)
 ├── requirements.txt     # Python dependencies
 ├── EXAMPLES.md          # Additional usage examples
@@ -223,6 +226,8 @@ After downloading price data, generate an HDF5 file with 60+ technical features 
 
 ```bash
 python generate.py
+# or on Windows, just double-click:
+generate.bat
 ```
 
 ### Options
