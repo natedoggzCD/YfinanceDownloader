@@ -656,17 +656,34 @@ Examples:
 
     print("=" * 60)
 
+    # When --tickers is explicitly provided, bypass price range filter
+    if args.tickers:
+        print(f"\n  --tickers flag provided: bypassing ${MIN_PRICE}-${MAX_PRICE} price filter")
+        print(f"  Tickers requested: {', '.join(args.tickers)}")
+
     # Reconcile
     if args.reconcile or args.all:
         reconcile_stocks(dry_run=args.dry_run)
 
-    # Initial download
-    if args.init or (args.all and not Path(DAILY_CSV).exists()):
-        if args.tickers:
-            tickers = args.tickers
-        else:
-            nasdaq_df = load_nasdaq_screener(NASDAQ_SCREENER)
-            tickers = nasdaq_df["Symbol"].tolist()
+    # If --tickers is provided, ensure those tickers exist in our CSVs
+    # by init-downloading any that are missing (bypasses price filter)
+    if args.tickers and (args.init or args.update or args.all):
+        daily_path = Path(DAILY_CSV)
+        hourly_path = Path(HOURLY_CSV)
+
+        # Find which requested tickers are not already in the CSVs
+        existing_daily, _, _ = get_csv_info(daily_path) if daily_path.exists() else ([], datetime.min, datetime.max)
+        existing_set = set(t.upper() for t in existing_daily)
+        missing_tickers = [t for t in args.tickers if t.upper() not in existing_set]
+
+        if missing_tickers:
+            print(f"\n  {len(missing_tickers)} requested ticker(s) not yet in dataset — downloading now...")
+            initial_download(missing_tickers, dry_run=args.dry_run)
+
+    # Initial download (full screener-based, only when no --tickers override)
+    if not args.tickers and (args.init or (args.all and not Path(DAILY_CSV).exists())):
+        nasdaq_df = load_nasdaq_screener(NASDAQ_SCREENER)
+        tickers = nasdaq_df["Symbol"].tolist()
         initial_download(tickers, dry_run=args.dry_run)
 
     # Update
