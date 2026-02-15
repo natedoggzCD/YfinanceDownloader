@@ -1,5 +1,8 @@
 # Configuration file for YfinanceDownloader
-# Modify these settings to customize your data download
+# Copy this file to config.py and modify as needed:
+#   cp config.example.py config.py
+#
+# config.py is gitignored so your local settings won't be overwritten.
 
 # Stock price range filter (in USD)
 # Only stocks within this price range will be included

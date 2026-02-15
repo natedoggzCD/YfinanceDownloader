@@ -7,6 +7,9 @@
 *.db
 *.sqlite
 
+# User config (use config.example.py as template)
+config.py
+
 # Python cache
 __pycache__/
 *.py[cod]

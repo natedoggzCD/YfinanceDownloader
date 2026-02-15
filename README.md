@@ -26,10 +26,12 @@ It also includes a **feature engineering pipeline** (`generate.py`) that compute
 git clone https://github.com/natedoggzCD/YfinanceDownloader.git
 cd YfinanceDownloader
 pip install -r requirements.txt
+cp config.example.py config.py   # Create your local config
 ```
 
 1. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
-2. **Double-click `daily.bat`** (Windows) — or run `python downloader.py --all` from a terminal.
+2. Edit `config.py` to set your preferred price range and settings.
+3. **Double-click `daily.bat`** (Windows) — or run `python downloader.py --all` from a terminal.
 
 That's it. On the first run it downloads all historical data; on every run after that it only fetches new bars. The output files `prices_daily.csv` and `prices_hourly.csv` are created automatically.
 
@@ -84,7 +86,7 @@ python downloader.py --all
 
 ## ⚙️ Configuration
 
-All settings live in [`config.py`](config.py) — edit to match your needs:
+All settings live in [`config.py`](config.example.py) (copy from `config.example.py`) — edit to match your needs:
 
 ```python
 # Price range filter
@@ -203,7 +205,8 @@ NASDAQ Screener ──► Filter by price range ──► Compare with local CSV
 YfinanceDownloader/
 ├── downloader.py        # Core script — download, update, reconcile
 ├── generate.py          # Feature engineering → daily_features.h5
-├── config.py            # All user-configurable settings
+├── config.example.py    # Configuration template (copy to config.py)
+├── config.py            # Your local settings (gitignored)
 ├── daily.bat            # One-click daily update (Windows)
 ├── nasdaq_screener.csv  # NASDAQ stock listing (you download this)
 ├── requirements.txt     # Python dependencies
