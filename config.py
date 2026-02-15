@@ -28,6 +28,14 @@ INVALID_TICKER_PATTERNS = r"[\^\.\/\-=]"
 # Minimum number of data points required for a stock to be kept
 MIN_OBSERVATIONS = 100
 
+# Retry settings for failed downloads
+MAX_RETRIES = 3          # Maximum number of retry attempts per ticker
+RETRY_BACKOFF_SECONDS = 5  # Base wait time between retries (doubles each attempt)
+
+# Stale ticker threshold
+# Tickers whose latest data is older than this many days are auto-skipped during updates
+STALE_TICKER_DAYS = 5
+
 # Yahoo Finance hourly data limit (days)
 # yfinance only provides hourly data for approximately the last 730 days (~2 years)
 # Using 729 to stay safely within the boundary Yahoo enforces

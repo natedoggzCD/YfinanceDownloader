@@ -2,9 +2,9 @@
 
 # 📈 YfinanceDownloader
 
-**Bulk-download daily & hourly OHLCV stock data for every NASDAQ-listed ticker.**
+**Bulk-download daily & hourly OHLCV stock data for every NASDAQ-listed ticker, then generate ML-ready technical features.**
 
-Filtered by price range · Incrementally updated · Synced with current listings · Ready for analysis
+Filtered by price range · Incrementally updated · Synced with current listings · Feature engineering built in
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
@@ -15,6 +15,8 @@ Filtered by price range · Incrementally updated · Synced with current listings
 ---
 
 A command-line Python tool that downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for all stocks on the NASDAQ exchange. It maintains local CSV files of daily and hourly prices that stay automatically synchronized with current NASDAQ listings — new IPOs get added, delisted stocks get removed, and your data stays up to date with a single command or a double-click of `daily.bat`.
+
+It also includes a **feature engineering pipeline** (`generate.py`) that computes 60+ technical indicators, lag features, and rolling statistics from the daily data and saves the result to a compact HDF5 file ready for ML or analysis.
 
 ---
 
@@ -62,6 +64,7 @@ Just double-click it daily and your data stays current.
 | `python downloader.py --all` | Reconcile + update (+ init if no data exists yet) |
 | `python downloader.py --dry-run` | Preview changes without downloading anything |
 | `python downloader.py --tickers AAPL MSFT` | Process only specific tickers |
+| `python generate.py` | Generate technical features → `daily_features.h5` |
 | **`daily.bat`** | **One-click wrapper** — runs `--all` (Windows) |
 
 ### Examples
@@ -92,6 +95,11 @@ MAX_PRICE = 200.0        # Maximum stock price ($)
 START_DATE = "2018-01-02"
 END_DATE = None           # None = today
 
+# Robustness
+MAX_RETRIES = 3           # Retry failed downloads
+RETRY_BACKOFF_SECONDS = 5 # Exponential backoff base
+STALE_TICKER_DAYS = 5     # Auto-skip tickers stale > N days
+
 # Output files
 DAILY_CSV = "prices_daily.csv"
 HOURLY_CSV = "prices_hourly.csv"
@@ -111,6 +119,9 @@ HOURLY_CSV = "prices_hourly.csv"
 | `BATCH_SIZE` | `50` | Tickers downloaded per batch |
 | `PAUSE_AFTER_BATCHES` | `500` | API calls before pausing |
 | `PAUSE_DURATION_SECONDS` | `60` | Pause duration (seconds) |
+| `MAX_RETRIES` | `3` | Retry attempts per failed download |
+| `RETRY_BACKOFF_SECONDS` | `5` | Base wait between retries (doubles each attempt) |
+| `STALE_TICKER_DAYS` | `5` | Auto-skip tickers with no data in N days |
 
 </details>
 
@@ -191,6 +202,7 @@ NASDAQ Screener ──► Filter by price range ──► Compare with local CSV
 ```
 YfinanceDownloader/
 ├── downloader.py        # Core script — download, update, reconcile
+├── generate.py          # Feature engineering → daily_features.h5
 ├── config.py            # All user-configurable settings
 ├── daily.bat            # One-click daily update (Windows)
 ├── nasdaq_screener.csv  # NASDAQ stock listing (you download this)
@@ -202,13 +214,62 @@ YfinanceDownloader/
 
 ---
 
-## 🚦 Rate Limiting
+## 🧪 Feature Engineering (`generate.py`)
 
-The tool respects Yahoo Finance's API with built-in safeguards:
+After downloading price data, generate an HDF5 file with 60+ technical features for ML or analysis:
 
-- Downloads in batches of **50 tickers**
-- Pauses **60 seconds** after every **500 API calls**
-- Single-threaded to avoid triggering blocks
+```bash
+python generate.py
+```
+
+### Options
+
+```bash
+python generate.py --input prices_daily.csv --output daily_features.h5
+python generate.py --min-obs 252        # Require 1 year of history per ticker
+python generate.py --stale-days 5       # Skip tickers with no recent data
+```
+
+### Indicators Computed
+
+| Category | Features |
+|----------|----------|
+| **Moving Averages** | SMA(10, 20), EMA(10, 20) |
+| **Momentum** | RSI(14), MACD, Stochastic %K/%D, ROC(5, 10, 20), CCI |
+| **Volatility** | ATR(5, 14), Bollinger Bands, BB width/squeeze |
+| **Trend** | ADX, +DI/-DI, Ichimoku Cloud (5 components), EMA crossover |
+| **Volume** | OBV, Volume SMA(20), Volume ratio, Volume ROC |
+| **Derived** | ATR ratios, price-to-ATR, BB price position, distance from SMA20 |
+| **Lag Features** | Close, Volume, ATR, RSI lagged 1–5 days |
+| **Rolling Stats** | Rolling mean & std (5, 10, 20 day) for Close, Volume, ATR |
+
+### Output: `daily_features.h5`
+
+Compressed HDF5 file with `ticker` and `Date` as indexed data columns for fast queries:
+
+```python
+import pandas as pd
+df = pd.read_hdf("daily_features.h5", key="data")
+
+# Query a single ticker
+aapl = pd.read_hdf("daily_features.h5", key="data", where="ticker='AAPL'")
+```
+
+> **Note:** Requires `tables` (PyTables) and `blosc2` — both included in `requirements.txt`.
+
+---
+
+## 🛡️ Robustness Features
+
+## 🛡️ Robustness Features
+
+The downloader is built for unattended daily use with several safeguards:
+
+- **Max retries with exponential backoff** — failed downloads retry up to 3 times (5s → 10s → 20s wait)
+- **Stale ticker auto-skip** — tickers with no data in 5+ days are skipped during updates (configurable)
+- **Detailed failure reporting** — failed and stale tickers are listed at the end of each run
+- **Rate limiting** — downloads in batches of 50, pauses 60s after 500 API calls
+- **Single-threaded** — avoids triggering Yahoo Finance IP blocks
 
 > ⚠️ **Do not disable rate limiting** — aggressive downloading will result in IP blocking.
 

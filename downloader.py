@@ -41,6 +41,9 @@ from config import (
     PAUSE_DURATION_SECONDS,
     INVALID_TICKER_PATTERNS,
     HOURLY_MAX_DAYS,
+    MAX_RETRIES,
+    RETRY_BACKOFF_SECONDS,
+    STALE_TICKER_DAYS,
 )
 
 
@@ -171,30 +174,39 @@ def get_csv_info(csv_path: Path) -> Tuple[List[str], datetime, datetime]:
 def download_ticker_data(
     ticker: str, start: datetime, end: datetime, interval: str
 ) -> Optional[pd.DataFrame]:
-    """Download historical price data for a single ticker."""
-    try:
-        data = yf.download(
-            tickers=ticker,
-            interval=interval,
-            start=start,
-            end=end + timedelta(days=1),
-            progress=False,
-            auto_adjust=False,
-            actions=False,
-            prepost=False,
-            threads=False,
-        )
+    """Download historical price data for a single ticker with retry logic."""
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            data = yf.download(
+                tickers=ticker,
+                interval=interval,
+                start=start,
+                end=end + timedelta(days=1),
+                progress=False,
+                auto_adjust=False,
+                actions=False,
+                prepost=False,
+                threads=False,
+            )
 
-        if data.empty:
-            return None
+            if data.empty:
+                return None
 
-        df = data.reset_index()
-        df = ensure_flat_columns(df)
-        return df
+            df = data.reset_index()
+            df = ensure_flat_columns(df)
+            return df
 
-    except Exception as e:
-        print(f"    ERROR downloading {ticker}: {e}")
-        return None
+        except Exception as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                print(f"    RETRY {attempt}/{MAX_RETRIES} for {ticker} ({interval}): {e}")
+                print(f"    Waiting {wait}s before next attempt...")
+                time.sleep(wait)
+            else:
+                print(f"    FAILED {ticker} ({interval}) after {MAX_RETRIES} attempts: {last_error}")
+    return None
 
 
 def format_daily_data(raw_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
@@ -374,6 +386,7 @@ def initial_download(tickers: List[str], dry_run: bool = False):
     daily_added = 0
     hourly_added = 0
     failed = []
+    skipped_stale = []
 
     for i, ticker in enumerate(tickers, 1):
         print(f"  [{i}/{len(tickers)}] Downloading {ticker}...")
@@ -415,7 +428,11 @@ def initial_download(tickers: List[str], dry_run: bool = False):
     print(f"  Daily rows added: {daily_added}")
     print(f"  Hourly rows added: {hourly_added}")
     if failed:
-        print(f"  Failed: {len(failed)} tickers")
+        print(f"  Failed ({len(failed)} tickers):")
+        for f_item in failed:
+            print(f"    - {f_item}")
+    if skipped_stale:
+        print(f"  Skipped stale ({len(skipped_stale)} tickers): {', '.join(skipped_stale)}")
 
 
 # ============================================================================
@@ -463,6 +480,25 @@ def update_data(
     else:
         tickers_to_update = list(latest_by_ticker.keys())
 
+    # Auto-skip tickers with stale data (no update in > STALE_TICKER_DAYS days)
+    now = datetime.now()
+    stale_cutoff = now - timedelta(days=STALE_TICKER_DAYS)
+    stale_tickers = []
+    active_tickers = []
+    for t in tickers_to_update:
+        last_seen = latest_by_ticker.get(t.upper())
+        if last_seen is not None:
+            # Strip timezone info for comparison if needed
+            last_seen_naive = last_seen.replace(tzinfo=None) if last_seen.tzinfo else last_seen
+            if last_seen_naive < stale_cutoff:
+                stale_tickers.append(t)
+                continue
+        active_tickers.append(t)
+    tickers_to_update = active_tickers
+
+    if stale_tickers:
+        print(f"  Auto-skipped {len(stale_tickers)} stale tickers (no data in >{STALE_TICKER_DAYS} days)")
+
     print(f"  Tickers to update: {len(tickers_to_update)}")
 
     if dry_run:
@@ -474,6 +510,7 @@ def update_data(
 
     request_count = 0
     total_added = 0
+    failed_tickers = []
 
     for batch_idx, batch in enumerate(_chunked(tickers_to_update, BATCH_SIZE), 1):
         print(f"  Batch {batch_idx}: Processing {len(batch)} tickers...")
@@ -511,6 +548,8 @@ def update_data(
                             cfg.csv_path, mode="a", header=False, index=False
                         )
                         total_added += len(formatted)
+            else:
+                failed_tickers.append(ticker)
 
             request_count += 1
 
@@ -521,6 +560,12 @@ def update_data(
             request_count = 0
 
     print(f"  Added {total_added} new rows")
+    if failed_tickers:
+        print(f"  Failed to update {len(failed_tickers)} tickers: {', '.join(failed_tickers[:20])}")
+    if stale_tickers:
+        print(f"  Stale tickers skipped: {', '.join(stale_tickers[:20])}")
+        if len(stale_tickers) > 20:
+            print(f"    ... and {len(stale_tickers) - 20} more")
 
 
 # ============================================================================
