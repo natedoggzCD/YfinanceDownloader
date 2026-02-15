@@ -28,6 +28,10 @@ INVALID_TICKER_PATTERNS = r"[\^\.\/\-=]"
 # Minimum number of data points required for a stock to be kept
 MIN_OBSERVATIONS = 100
 
+# Yahoo Finance hourly data limit (days)
+# yfinance only provides hourly data for approximately the last 730 days (~2 years)
+HOURLY_MAX_DAYS = 730
+
 # Gap detection threshold (days)
 # Stocks with data gaps larger than this will be flagged
 GAP_THRESHOLD_DAYS = 7

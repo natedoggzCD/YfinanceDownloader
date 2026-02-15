@@ -40,6 +40,7 @@ from config import (
     PAUSE_AFTER_BATCHES,
     PAUSE_DURATION_SECONDS,
     INVALID_TICKER_PATTERNS,
+    HOURLY_MAX_DAYS,
 )
 
 
@@ -325,6 +326,14 @@ def initial_download(tickers: List[str], dry_run: bool = False):
 
     print(f"  Date range: {start.date()} to {end.date()}")
 
+    # Warn user if requested range exceeds the hourly data limit
+    total_days = (end - start).days
+    if total_days > HOURLY_MAX_DAYS:
+        hourly_earliest = (end - timedelta(days=HOURLY_MAX_DAYS)).date()
+        print(f"\n  NOTE: Yahoo Finance only provides hourly data for the last ~2 years.")
+        print(f"        Hourly data will start from {hourly_earliest} instead of {start.date()}.")
+        print(f"        Daily data will still cover the full range.\n")
+
     if dry_run:
         print("  [DRY RUN] No data will be downloaded")
         return
@@ -381,8 +390,8 @@ def initial_download(tickers: List[str], dry_run: bool = False):
 
         request_count += 1
 
-        # Hourly data (limited to last ~700 days due to yfinance limits)
-        hourly_start = max(start, end - timedelta(days=700))
+        # Hourly data (limited to last ~2 years due to yfinance limits)
+        hourly_start = max(start, end - timedelta(days=HOURLY_MAX_DAYS))
         hourly_raw = download_ticker_data(ticker, hourly_start, end, "1h")
         if hourly_raw is not None and not hourly_raw.empty:
             hourly_formatted = format_hourly_data(hourly_raw, ticker)
@@ -635,6 +644,16 @@ Examples:
     print(f"NASDAQ Screener: {NASDAQ_SCREENER}")
     print(f"Daily CSV: {DAILY_CSV}")
     print(f"Hourly CSV: {HOURLY_CSV}")
+
+    # Check if the configured date range exceeds the hourly data limit
+    start = datetime.strptime(START_DATE, "%Y-%m-%d")
+    end = datetime.now() if END_DATE is None else datetime.strptime(END_DATE, "%Y-%m-%d")
+    total_days = (end - start).days
+    if total_days > HOURLY_MAX_DAYS:
+        print(f"\nWARNING: START_DATE ({START_DATE}) is more than 2 years ago.")
+        print(f"         Yahoo Finance only provides hourly data for the last ~{HOURLY_MAX_DAYS} days (~2 years).")
+        print(f"         Hourly data will be limited accordingly. Daily data is unaffected.")
+
     print("=" * 60)
 
     # Reconcile
