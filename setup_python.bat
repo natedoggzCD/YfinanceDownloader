@@ -39,11 +39,20 @@ set PYTHON_VERSION=3.11.7
 set INSTALLER_NAME=python-%PYTHON_VERSION%-amd64.exe
 set DOWNLOAD_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/%INSTALLER_NAME%
 
-REM Download Python installer using PowerShell
-powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%TEMP%\%INSTALLER_NAME%'}"
+REM Download Python installer using PowerShell with progress
+echo Downloading from python.org (approx. 25 MB)...
+powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%TEMP%\%INSTALLER_NAME%'; if (Test-Path '%TEMP%\%INSTALLER_NAME%') { exit 0 } else { exit 1 }}"
 
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to download Python installer.
+    echo Please download Python manually from https://www.python.org/downloads/
+    pause
+    exit /b 1
+)
+
+REM Verify file was downloaded
+if not exist "%TEMP%\%INSTALLER_NAME%" (
+    echo [ERROR] Installer file not found after download.
     echo Please download Python manually from https://www.python.org/downloads/
     pause
     exit /b 1
@@ -55,22 +64,28 @@ echo ============================================================
 echo Installing Python...
 echo ============================================================
 echo.
-echo This may take a few minutes. Please wait...
+echo This may take 2-3 minutes. A progress window will appear...
+echo Please do not close this window until installation completes.
 echo.
 
-REM Install Python silently with:
+REM Install Python with progress UI using start /wait to ensure we wait for completion
 REM - Add to PATH
 REM - Install pip
 REM - Install to default location
-REM - No progress UI
-"%TEMP%\%INSTALLER_NAME%" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0
+REM - Simple progress UI (not completely silent so user sees progress)
+start /wait "" "%TEMP%\%INSTALLER_NAME%" /passive InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0
 
 if %errorlevel% neq 0 (
-    echo [ERROR] Python installation failed.
+    echo.
+    echo [ERROR] Python installation failed with error code: %errorlevel%
+    echo.
+    echo Try running the installer manually: %TEMP%\%INSTALLER_NAME%
+    echo Or download from: https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
+echo.
 echo [OK] Python installation complete.
 echo.
 
