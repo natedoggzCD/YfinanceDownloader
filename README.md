@@ -20,7 +20,18 @@ It also includes a **feature engineering pipeline** (`generate.py`) that compute
 
 ---
 
-## ⚡ Quick Start
+## 🚀 Installation
+
+### For New Users (No Python Installed)
+
+**Windows users:** Just double-click **`setup_python.bat`** — it will:
+1. Check if Python is installed
+2. Download and install Python 3.11.7 if needed
+3. Install all required packages automatically
+
+That's it! Once complete, you can skip to [Configuration](#%EF%B8%8F-configuration).
+
+### For Users with Python Already Installed
 
 ```bash
 git clone https://github.com/natedoggzCD/YfinanceDownloader.git
@@ -28,6 +39,12 @@ cd YfinanceDownloader
 pip install -r requirements.txt
 cp config.example.py config.py   # Create your local config
 ```
+
+Or on Windows, just double-click **`install.bat`** to install the packages.
+
+---
+
+## ⚡ Quick Start
 
 1. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
 2. Edit `config.py` to set your preferred price range and settings.
