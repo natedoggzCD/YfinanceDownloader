@@ -7,7 +7,8 @@
 *.db
 *.sqlite
 
-# User config (use config.example.py / screen_config.example.py as templates)
+# User config (use config.example.yaml or config.example.py as templates)
+config.yaml
 config.py
 screen_config.py
 trade_config.py

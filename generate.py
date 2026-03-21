@@ -163,6 +163,7 @@ def add_technical_indicators(df):
     df["EMA_10"] = ema(df["Close"], 10)
     df["EMA_20"] = ema(df["Close"], 20)
     df["RSI_14"] = rsi(df["Close"], 14)
+    df["RSI_2"] = rsi(df["Close"], 2)     # Short-term RSI for mean reversion detection
 
     macd_line, macd_signal, macd_hist = macd(df["Close"])
     df["MACD"] = macd_line

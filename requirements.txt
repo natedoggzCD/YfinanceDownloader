@@ -4,3 +4,4 @@ numpy>=1.21.0
 pyarrow>=10.0.0
 playwright>=1.42.0
 alpaca-py>=0.21.0
+pyyaml>=6.0

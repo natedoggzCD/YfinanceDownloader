@@ -12,6 +12,16 @@
 
 ---
 
+### What's New (v2)
+
+- **Screener v2** — Cross-factor bonuses, volume confirmation gates, signal-specific stop/target levels, new pullback-entry scan type, R:R quality gate
+- **Smart Position Sizing** — Conviction-scaled risk (0.5%-1.5%) based on score quality, portfolio heat cap, bracket orders with automatic stop-loss + take-profit
+- **Unified YAML Config** — One `config.yaml` replaces three Python files (Python configs still work as fallback)
+- **Data Validation** — `--validate` flag checks data quality before screening
+- **Verbose Mode** — `--verbose` shows per-factor score breakdown for every pick
+
+---
+
 **Accurate data is the foundation of every trading strategy, ML model, and backtest.** If your prices are stale, your listings are outdated, or your features are miscalculated, nothing built on top of that data can be trusted. YfinanceDownloader solves this by giving you a single source of truth — clean, current, and complete NASDAQ price data that stays in sync automatically.
 
 It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), transforms the raw prices into **60+ ML-ready technical features**, and then **scores every stock** across momentum, trend, volume, and volatility factors — giving you ranked trade candidates with entry/stop/target prices. No terminal required.
@@ -27,8 +37,16 @@ Five batch files do all the work:
 | **`trade.bat`** | Executes trades on Alpaca (paper or live) from screener results |
 
 ```
-daily.bat  →  generate.bat  →  screen.bat  →  trade.bat
-(download)    (features)       (trade picks)   (execute)
+nasdaq_screener.csv
+       |
+   daily.bat ---------> prices_daily.csv + prices_hourly.csv
+       |
+   generate.bat ------> daily_features.parquet (60+ indicators)
+       |
+   screen.bat --------> screener_results.csv (scored & ranked picks)
+       |
+   trade.bat ----------> Alpaca orders (bracket: entry + stop + target)
+                         trade_log.csv (audit trail)
 ```
 
 ---
@@ -48,7 +66,7 @@ git clone https://github.com/natedoggzCD/YfinanceDownloader.git
 
 **2. Set up (one time)**
 1. **Double-click `install.bat`** — installs all Python packages automatically.
-2. Copy `config.example.py` to `config.py` — edit it to set your price range if you want (defaults work fine).
+2. Copy `config.example.yaml` to `config.yaml` — edit if you want (defaults work fine). Or use the legacy Python config files.
 3. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
 
 **3. Get your data** — **double-click `daily.bat`**. It asks if you want to refresh the screener, then downloads everything. Two CSV files appear: `prices_daily.csv` and `prices_hourly.csv`.
@@ -161,7 +179,7 @@ Requires Alpaca API keys in `trade_config.py`. See [setup guide](#-alpaca-paper-
 
 ## 🎯 Stock Screener
 
-The screener uses quantitative scoring logic ported from the [AutoTrade](https://github.com/natedoggzCD) trading system — no LLM, no GPU, no machine learning required. Pure rule-based signal scoring.
+The screener uses quantitative scoring logic ported from the [AutoTrade](https://github.com/natedoggzCD) trading system — no LLM, no GPU, no machine learning required. Pure rule-based signal scoring with cross-factor confirmation.
 
 ### Signal Families
 
@@ -170,6 +188,7 @@ The screener uses quantitative scoring logic ported from the [AutoTrade](https:/
 | **Momentum Breakout** | Trending stocks with volume expansion | Weekly return > 1%, RSI 30-70, volume > 1.5x avg, price > SMA20 |
 | **Mean Reversion** | Oversold bounce candidates | Weekly return < -3%, RSI < 35, volume > 2x avg (capitulation) |
 | **Breakout** | Bollinger squeeze releasing | BB width contracting, volume confirmation > 1.5x |
+| **Pullback Entry** | Uptrend pullback to SMA20 support | Price > SMA50, within 2% of SMA20, RSI 35-60 |
 
 ### Scoring Factors (Weighted to 100)
 
@@ -180,6 +199,23 @@ The screener uses quantitative scoring logic ported from the [AutoTrade](https:/
 | **Volatility** | 20% | ATR in optimal range (1.5% ideal) |
 | **Trend** | 15% | SMA alignment (20/50/200) + ADX strength |
 | **Pullback** | 10% | RSI sweet-spot for entry timing |
+| **Cross-Factor Bonus** | +0-10 | Bonus when multiple factors confirm (e.g. momentum + volume) |
+
+### Quality Gates
+
+Signals must pass these gates before appearing in results:
+
+- **Volume confirmation** — Momentum/breakout signals without volume > 1.5x average get a 50% score penalty
+- **Minimum R:R** — Only signals with risk:reward >= 1.5 are included (configurable)
+- **Signal-specific stops** — Each signal type uses optimized ATR multipliers for stop/target distances:
+
+| Signal Type | Stop (ATR x) | Target (ATR x) | Why |
+|-------------|:---:|:---:|-----|
+| Momentum Breakout | 2.0 | 3.0 | Wider target — ride the trend |
+| Mean Reversion | 1.5 | 2.0 | Tight stop — if bounce fails, exit fast |
+| Breakout | 2.5 | 3.5 | Wide stop — breakouts are volatile |
+| Pullback Entry | 1.5 | 2.5 | SMA20 is the line in the sand |
+| General | 2.0 | 2.2 | Default fallback |
 
 ### Output: `screener_results.csv`
 
@@ -187,12 +223,13 @@ Each row is a ranked trade candidate with:
 
 ```
 ticker, Close, score, scan_type, entry_price, stop_price, target_price, risk_reward,
-momentum_score, trend_score, volume_score, pullback_score, volatility_score, atr_pct
+momentum_score, trend_score, volume_score, pullback_score, volatility_score,
+mean_reversion_score, pullback_entry_score, cross_factor_bonus, atr_pct
 ```
 
 ### AI Trade Summaries (Optional)
 
-Set an API key in `screen_config.py` to get AI-generated 2-3 sentence trade summaries for your top picks. Works with:
+Set an API key in your config to get AI-generated 2-3 sentence trade summaries for your top picks. Works with:
 
 - **OpenAI** — `gpt-4o-mini` (cheap) or `gpt-4o` (best)
 - **Any OpenAI-compatible API** — Ollama, LM Studio, vLLM, etc. (just change `AI_BASE_URL`)
@@ -206,7 +243,10 @@ python screener.py                     # Run with defaults
 python screener.py --top 20            # Show top 20 only
 python screener.py --scan momentum     # Only momentum breakout scan
 python screener.py --scan reversion    # Only mean reversion scan
+python screener.py --scan pullback     # Only pullback entry scan
 python screener.py --ai                # Enable AI summaries
+python screener.py --verbose           # Show per-factor score breakdown
+python screener.py --validate          # Check data quality before screening
 python screener.py --output picks.csv  # Custom output file
 ```
 
@@ -251,24 +291,42 @@ PAPER_TRADING = True                            # Start with paper trading!
 The trader reads your `screener_results.csv` and:
 
 1. **Connects** to your Alpaca paper account
-2. **Sizes positions** using R-Unit risk management (same logic as [AutoTrade](https://github.com/natedoggzCD)) — risking 1% of equity per trade
-3. **Shows you the plan** — every order with entry, stop, target, and cost
-4. **Asks for confirmation** before placing any orders
-5. **Logs every trade** to `trade_log.csv` for review
+2. **Checks portfolio heat** — blocks new trades if total open risk exceeds 6% of equity
+3. **Validates each pick** — R:R >= 1.5, ATR stop validation, score >= 65
+4. **Sizes positions** using conviction-scaled R-Unit sizing — higher-scoring picks get more capital
+5. **Places bracket orders** — entry + stop-loss + take-profit in one atomic order
+6. **Asks for confirmation** before placing any orders
+7. **Logs every trade** to `trade_log.csv` for review
 
-### Position Sizing (R-Unit)
+### Position Sizing (Conviction-Scaled R-Unit)
 
-Every trade is sized so that hitting your stop loss costs exactly 1% of your account:
+Every trade is sized so that hitting your stop loss costs a controlled percentage of your account. With conviction scaling (default ON), the risk budget scales with the screener score:
+
+| Score | Risk % | Logic |
+|:-----:|:------:|-------|
+| 100 | 1.5% | Top-quality signal gets maximum budget |
+| 75 | 1.0% | Mid-quality gets baseline risk |
+| 50 | 0.5% | Marginal signal gets minimum budget |
 
 ```
-Risk per trade = Account Equity × 1%
-Shares = Risk per trade ÷ (Entry Price - Stop Price)
+Risk per trade = Account Equity × Risk% (scaled by score)
+Shares = Risk per trade / (Entry Price - Stop Price)
 ```
 
-Example: $100,000 account, buying a $50 stock with a $47 stop:
-- Risk = $100,000 × 1% = $1,000
+Example: $100,000 account, score 80, buying a $50 stock with a $47 stop:
+- Risk = $100,000 × 1.1% (score-scaled) = $1,100
 - Risk per share = $50 - $47 = $3
-- Shares = $1,000 ÷ $3 = **333 shares** ($16,650 position)
+- Shares = $1,100 ÷ $3 = **366 shares** ($18,300 position)
+
+### Portfolio Risk Controls
+
+| Control | Default | What it does |
+|---------|---------|-------------|
+| **Portfolio Heat Cap** | 6% | Total open risk across all positions. No new trades above this. |
+| **R:R Minimum** | 1.5 | Skips trades where reward < 1.5x the risk |
+| **ATR Stop Validation** | On | Verifies stop distance is at least 1.5x ATR |
+| **Bracket Orders** | On | Places stop-loss + take-profit with every entry |
+| **Cash Reserve** | 20% | Always keeps 20% of equity in cash |
 
 ### Trader Commands
 
@@ -283,18 +341,28 @@ python trader.py --input my_picks.csv  # Use custom screener output
 
 ### Trader Configuration
 
-All settings in `trade_config.py`:
+All settings in `trade_config.py` (or `config.yaml`):
 
 ```python
 # Position sizing
-RISK_PER_TRADE_PCT = 1.0     # 1% risk per trade (conservative)
-MAX_POSITION_PCT = 5.0        # Max 5% of equity per position
+RISK_PER_TRADE_PCT = 1.0     # Base 1% risk per trade
+MAX_POSITION_PCT = 8.0        # Max 8% of equity per position
 MAX_POSITIONS = 10            # Max 10 open positions at once
+
+# Conviction scaling (scales risk by score quality)
+CONVICTION_SCALING = True             # Enable/disable
+CONVICTION_RISK_RANGE = [0.5, 1.5]   # [min%, max%] risk range
+
+# Risk controls
+PORTFOLIO_HEAT_MAX_PCT = 6.0  # Max total open risk
+MIN_RR_TO_TRADE = 1.5        # Minimum risk:reward ratio
+ATR_STOP_VALIDATION = True    # Verify stops are meaningful
+USE_BRACKET_ORDERS = True     # Auto stop-loss + take-profit
 
 # Safety
 MIN_CASH_RESERVE_PCT = 20.0   # Always keep 20% in cash
-MIN_SCORE_TO_TRADE = 60.0     # Only trade stocks scored 60+
-CONFIRM_BEFORE_TRADING = True # Ask before placing orders
+MIN_SCORE_TO_TRADE = 65.0     # Only trade stocks scored 65+
+CONFIRM_BEFORE_TRADING = True  # Ask before placing orders
 
 # Mode
 PAPER_TRADING = True          # True = paper, False = live
@@ -320,7 +388,7 @@ PAPER_TRADING = False    # ← This switches to real money
 
 ### Screener Configuration
 
-Copy `screen_config.example.py` to `screen_config.py` and edit thresholds:
+Copy `screen_config.example.py` to `screen_config.py` and edit thresholds (or use `config.yaml`):
 
 ```python
 # Universe filters
@@ -334,6 +402,20 @@ WEIGHT_VOLUME     = 0.25
 WEIGHT_VOLATILITY = 0.20
 WEIGHT_TREND      = 0.15
 WEIGHT_PULLBACK   = 0.10
+
+# Quality gates
+VOLUME_CONFIRMATION_GATE = 1.5  # Penalize momentum/breakout without volume
+MIN_RR_RATIO = 1.5             # Minimum risk:reward ratio
+SCAN_PULLBACK_ENTRY = True      # Enable pullback-to-support scan
+
+# Signal-specific stop/target ATR multipliers
+ATR_MULTIPLES = {
+    "momentum_breakout": {"stop": 2.0, "target": 3.0},
+    "mean_reversion":    {"stop": 1.5, "target": 2.0},
+    "breakout":          {"stop": 2.5, "target": 3.5},
+    "pullback_entry":    {"stop": 1.5, "target": 2.5},
+    "general":           {"stop": 2.0, "target": 2.2},
+}
 
 # AI (optional)
 AI_API_KEY = ""                            # Your key (or "" to disable)
@@ -391,6 +473,28 @@ python downloader.py --all
 ---
 
 ## ⚙️ Configuration
+
+### Option 1: `config.yaml` (Recommended)
+
+One YAML file for all settings — downloader, screener, and trader. Copy `config.example.yaml` to `config.yaml`:
+
+```yaml
+screener:
+  weights: {momentum: 0.30, trend: 0.15, volume: 0.25, pullback: 0.10, volatility: 0.20}
+  min_rr_ratio: 1.5
+  volume_confirmation_gate: 1.5
+
+trading:
+  conviction_scaling: true
+  use_bracket_orders: true
+  portfolio_heat_max_pct: 6.0
+  alpaca_api_key: "your-key"
+  alpaca_secret_key: "your-secret"
+```
+
+### Option 2: Python config files (Legacy)
+
+Three separate Python files — still fully supported as fallback if `config.yaml` doesn't exist.
 
 All settings live in [`config.py`](config.example.py) (copy from `config.example.py`) — edit to match your needs:
 
@@ -511,19 +615,17 @@ NASDAQ Screener ──► Filter by price range ──► Compare with local CSV
 YfinanceDownloader/
 ├── downloader.py              # Core script — download, update, reconcile
 ├── generate.py                # Feature engineering → daily_features.parquet
-├── screener.py                # Stock screener → screener_results.csv
+├── screener.py                # Stock screener v2 → screener_results.csv
+├── trader.py                  # Trade execution → trade_log.csv
+├── config.example.yaml        # Unified config template (RECOMMENDED — copy to config.yaml)
 ├── config.example.py          # Downloader config template (copy to config.py)
 ├── screen_config.example.py   # Screener config template (copy to screen_config.py)
 ├── trade_config.example.py    # Trader config template (copy to trade_config.py)
-├── config.py                  # Your downloader settings (gitignored)
-├── screen_config.py           # Your screener settings (gitignored)
-├── trade_config.py            # Your Alpaca API keys (gitignored)
 ├── install.bat                # One-click dependency install (Windows)
 ├── daily.bat                  # One-click daily update (Windows)
 ├── generate.bat               # One-click feature generation (Windows)
 ├── screen.bat                 # One-click stock screener (Windows)
 ├── trade.bat                  # One-click Alpaca trader (Windows)
-├── trader.py                  # Trade execution → trade_log.csv
 ├── nasdaq_screener.csv        # NASDAQ stock listing (you download this)
 ├── requirements.txt           # Python dependencies
 ├── EXAMPLES.md                # Additional usage examples
@@ -556,7 +658,7 @@ python generate.py --stale-days 5       # Skip tickers with no recent data
 | Category | Features |
 |----------|----------|
 | **Moving Averages** | SMA(10, 20), EMA(10, 20) |
-| **Momentum** | RSI(14), MACD, Stochastic %K/%D, ROC(5, 10, 20), CCI |
+| **Momentum** | RSI(2, 14), MACD, Stochastic %K/%D, ROC(5, 10, 20), CCI |
 | **Volatility** | ATR(5, 14), Bollinger Bands, BB width/squeeze |
 | **Trend** | ADX, +DI/-DI, Ichimoku Cloud (5 components), EMA crossover |
 | **Volume** | OBV, Volume SMA(20), Volume ratio, Volume ROC |

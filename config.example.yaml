@@ -1,0 +1,144 @@
+# ============================================================================
+# YfinanceDownloader — Unified Configuration
+# ============================================================================
+# Copy this file to config.yaml and edit to your preferences.
+# This single file replaces config.py, screen_config.py, and trade_config.py.
+# If config.yaml exists, it takes priority. Python config files still work as fallback.
+#
+# Tip: You only need to set the values you want to change — everything has defaults.
+
+# ── Data Download Settings ──────────────────────────────────────
+data:
+  min_price: 2.00                # Minimum stock price ($)
+  max_price: 200.00              # Maximum stock price ($)
+  start_date: "2018-01-02"       # Historical data start date
+  daily_csv: "prices_daily.csv"
+  hourly_csv: "prices_hourly.csv"
+  nasdaq_screener: "nasdaq_screener.csv"
+  batch_size: 50                 # Tickers per download batch
+  stale_ticker_days: 5           # Skip tickers with no data in this many days
+  hourly_max_days: 729           # Yahoo Finance hourly data limit (~2 years)
+
+# ── Stock Screener Settings ─────────────────────────────────────
+screener:
+  # Input / Output
+  features_parquet: "daily_features.parquet"
+  output_csv: "screener_results.csv"
+  top_n: 50                      # Number of top picks to output
+
+  # Universe filters
+  min_price: 1.00
+  max_price: 350.00
+  min_avg_volume: 500000
+  min_atr_pct: 0.5              # Minimum ATR as % of price
+  max_atr_pct: 8.0              # Maximum ATR as % of price
+
+  # Scoring weights (must sum to 1.0)
+  weights:
+    momentum: 0.30               # ROC, MACD histogram, weekly return
+    trend: 0.15                  # SMA alignment, ADX strength
+    volume: 0.25                 # Volume surge vs 20-day average
+    pullback: 0.10               # RSI pullback sweet-spot
+    volatility: 0.20             # ATR in optimal range
+
+  # Signal families — set to false to disable
+  scan_types:
+    momentum_breakout: true      # Trending + volume expansion
+    mean_reversion: true         # RSI oversold + volume capitulation
+    breakout: true               # Bollinger squeeze releasing
+    pullback_entry: true         # Uptrend pullback to SMA20 support
+
+  # Signal-specific ATR multiples for stop/target calculation
+  # Different setups deserve different risk parameters
+  atr_multiples:
+    momentum_breakout:
+      stop: 2.0                  # Moderate stop — trend provides cushion
+      target: 3.0                # Wide target — ride the trend
+    mean_reversion:
+      stop: 1.5                  # Tight stop — if bounce fails, exit fast
+      target: 2.0                # Moderate target — snap back to mean
+    breakout:
+      stop: 2.5                  # Wide stop — breakouts are volatile
+      target: 3.5                # Wide target — breakouts can run
+    pullback_entry:
+      stop: 1.5                  # Tight stop — SMA20 is the line
+      target: 2.5                # Moderate target — continuation move
+    general:
+      stop: 2.0                  # Default fallback
+      target: 2.2
+
+  # Quality gates (filter out low-quality signals)
+  volume_confirmation_gate: 1.5  # Momentum/breakout need volume > 1.5x avg
+  min_rr_ratio: 1.5             # Minimum risk:reward to output
+  min_score: 65                  # Minimum composite score to output
+
+  # Score normalization: "absolute" (0-100) or "percentile" (rank within day)
+  score_normalization: "absolute"
+
+  # Momentum breakout thresholds
+  momentum:
+    min_weekly_return: 1.0       # % minimum weekly return
+    rsi_min: 30
+    rsi_max: 70
+    min_volume_ratio: 1.5
+
+  # Mean reversion thresholds
+  mean_reversion:
+    max_weekly_return: -3.0      # % max (negative = falling)
+    rsi_max: 35
+    min_volume_ratio: 2.0
+
+  # Breakout thresholds
+  breakout:
+    bb_width_min: 0.03           # Min Bollinger bandwidth (squeeze)
+    min_volume_ratio: 1.5
+
+  # Pullback entry thresholds
+  pullback_entry:
+    sma20_proximity_pct: 2.0     # Within 2% of SMA20
+    rsi_min: 35
+    rsi_max: 60
+
+  # AI summary (optional)
+  ai:
+    api_key: ""                  # Your API key (or "" to disable)
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4o-mini"
+    max_picks: 10
+
+# ── Trading Settings (Alpaca) ──────────────────────────────────
+trading:
+  # API credentials — get free keys at https://app.alpaca.markets/signup
+  alpaca_api_key: ""
+  alpaca_secret_key: ""
+  paper_trading: true            # true = simulated, false = real money
+
+  # Position sizing (R-Unit method)
+  risk_per_trade_pct: 1.0        # Base % of equity risked per trade
+  max_position_pct: 8.0          # Max % of equity in one position
+  max_positions: 10              # Max simultaneous positions
+  min_position_value: 100.0      # Skip tiny positions below this $
+
+  # Conviction-scaled sizing (scales risk by score quality)
+  # High-scoring picks get more risk budget, low-scoring get less
+  conviction_scaling: true
+  conviction_risk_range: [0.5, 1.5]  # [min%, max%] risk range
+
+  # Portfolio-level risk controls
+  portfolio_heat_max_pct: 6.0    # Max total open risk as % of equity
+  min_cash_reserve_pct: 20.0     # Always keep this % in cash
+
+  # Order settings
+  order_type: "market"
+  time_in_force: "day"
+  use_bracket_orders: true       # Place stop-loss + take-profit with entry
+  confirm_before_trading: true   # Ask before placing orders
+
+  # Quality gates
+  min_score_to_trade: 65         # Only trade stocks scored 65+
+  min_rr_to_trade: 1.5           # Skip trades with R:R below this
+  atr_stop_validation: true      # Verify stop >= 1.5x ATR
+
+  # Files
+  screener_csv: "screener_results.csv"
+  trade_log_csv: "trade_log.csv"

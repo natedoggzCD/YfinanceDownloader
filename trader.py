@@ -2,8 +2,8 @@
 trader.py — Execute trades on Alpaca using screener results.
 
 Reads screener_results.csv, connects to your Alpaca paper (or live) account,
-sizes positions using R-Unit risk management, and places orders for the
-top-scoring stocks.
+sizes positions using R-Unit risk management with conviction scaling, and
+places bracket orders (entry + stop-loss + take-profit) for top-scoring stocks.
 
 Usage:
     python trader.py                    # Trade top picks (with confirmation)
@@ -13,7 +13,8 @@ Usage:
 
 Requires:
     pip install alpaca-py
-    Copy trade_config.example.py → trade_config.py and add your API keys.
+    Copy trade_config.example.py -> trade_config.py and add your API keys,
+    or use config.yaml (preferred).
 """
 
 import argparse
@@ -21,26 +22,61 @@ import sys
 import os
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
 # ── Load Config ──────────────────────────────────────────────────
 
-def load_config():
-    """Load trade_config.py, fall back to trade_config.example.py."""
+def _load_yaml_config(yaml_path: str) -> dict:
+    """Load config.yaml and flatten trading section into flat keys."""
+    try:
+        import yaml
+    except ImportError:
+        return {}
+
+    if not os.path.exists(yaml_path):
+        return {}
+
+    with open(yaml_path, "r") as f:
+        raw = yaml.safe_load(f) or {}
+
+    cfg = {}
+    trading = raw.get("trading", {})
+    for key, val in trading.items():
+        cfg[key.upper()] = val
+
+    # Also load screener section for shared settings
+    scr = raw.get("screener", {})
+    cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "daily_features.parquet")
+    cfg["OUTPUT_CSV"] = scr.get("output_csv", "screener_results.csv")
+    if "SCREENER_CSV" not in cfg:
+        cfg["SCREENER_CSV"] = cfg.get("OUTPUT_CSV", "screener_results.csv")
+
+    return cfg
+
+
+def load_config() -> dict:
+    """Load config.yaml first, fall back to trade_config.py / trade_config.example.py."""
+    # Try YAML first
+    yaml_cfg = _load_yaml_config("config.yaml")
+    if yaml_cfg:
+        return yaml_cfg
+
+    # Fall back to Python config
     config = {}
     config_file = "trade_config.py"
     if not os.path.exists(config_file):
         config_file = "trade_config.example.py"
         if not os.path.exists(config_file):
-            print("ERROR: No trade_config.py found.")
-            print("Copy trade_config.example.py to trade_config.py and add your Alpaca API keys.")
+            print("ERROR: No config.yaml or trade_config.py found.")
+            print("Copy config.example.yaml to config.yaml, or trade_config.example.py to trade_config.py.")
             sys.exit(1)
     with open(config_file, "r") as f:
         exec(f.read(), config)
     return config
 
 
-def validate_keys(cfg):
+def validate_keys(cfg: dict):
     """Check that API keys are set."""
     key = cfg.get("ALPACA_API_KEY", "")
     secret = cfg.get("ALPACA_SECRET_KEY", "")
@@ -54,9 +90,9 @@ def validate_keys(cfg):
         print("  1. Go to https://app.alpaca.markets/signup")
         print("  2. Sign up (email + password — no funding required)")
         print("  3. Click 'Paper Trading' in the left sidebar")
-        print("  4. Click 'View' next to API Keys → 'Generate New Key'")
+        print("  4. Click 'View' next to API Keys -> 'Generate New Key'")
         print("  5. Copy your API Key and Secret Key")
-        print("  6. Paste them into trade_config.py:")
+        print("  6. Paste them into trade_config.py or config.yaml:")
         print()
         print('     ALPACA_API_KEY = "PKXXXXXXXXXXXXXXXX"')
         print('     ALPACA_SECRET_KEY = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"')
@@ -69,7 +105,7 @@ def validate_keys(cfg):
 
 # ── Alpaca Connection ────────────────────────────────────────────
 
-def connect_alpaca(cfg):
+def connect_alpaca(cfg: dict):
     """Create and validate the Alpaca trading client."""
     try:
         from alpaca.trading.client import TradingClient
@@ -99,7 +135,7 @@ def connect_alpaca(cfg):
     return client, account
 
 
-def print_account_summary(account, paper):
+def print_account_summary(account, paper: bool):
     """Display account status."""
     mode = "PAPER" if paper else "LIVE"
     equity = float(account.equity)
@@ -118,17 +154,31 @@ def print_account_summary(account, paper):
     return equity, cash
 
 
-# ── Position Sizing (R-Unit from AutoTrade) ──────────────────────
+# ── Position Sizing (R-Unit with Conviction Scaling) ─────────────
 
-def calculate_position_size(entry_price, stop_price, equity, cfg):
+def calculate_position_size(entry_price: float, stop_price: float, equity: float,
+                            cfg: dict, score: float = None) -> int:
     """
-    R-Unit position sizing — ported from AutoTrade's RUnitSizer.
-    Calculates share quantity so that hitting the stop costs exactly
-    RISK_PER_TRADE_PCT of your account.
+    R-Unit position sizing with optional conviction scaling.
+    Ported from AutoTrade's RUnitSizer + ConvictionEngine.
+
+    When conviction_scaling is enabled, higher-scoring picks get more risk
+    budget (up to 1.5%) while lower-scoring picks get less (down to 0.5%).
     """
-    risk_pct = cfg.get("RISK_PER_TRADE_PCT", 1.0) / 100.0
-    max_notional_pct = cfg.get("MAX_POSITION_PCT", 5.0) / 100.0
+    base_risk_pct = cfg.get("RISK_PER_TRADE_PCT", 1.0) / 100.0
+    max_notional_pct = cfg.get("MAX_POSITION_PCT", 8.0) / 100.0
     min_value = cfg.get("MIN_POSITION_VALUE", 100.0)
+
+    # Conviction-scaled risk (from AutoTrade conviction_engine)
+    if cfg.get("CONVICTION_SCALING", True) and score is not None:
+        risk_range = cfg.get("CONVICTION_RISK_RANGE", [0.5, 1.5])
+        low_risk = risk_range[0] / 100.0
+        high_risk = risk_range[1] / 100.0
+        # Linear interpolation: score 50 -> low_risk, score 100 -> high_risk
+        t = np.clip((score - 50) / 50, 0, 1)
+        risk_pct = low_risk + t * (high_risk - low_risk)
+    else:
+        risk_pct = base_risk_pct
 
     # Dollar risk per trade (1R)
     risk_unit = equity * risk_pct
@@ -153,9 +203,29 @@ def calculate_position_size(entry_price, stop_price, equity, cfg):
     return qty
 
 
+# ── Portfolio Risk ───────────────────────────────────────────────
+
+def calculate_portfolio_heat(client, equity: float) -> float:
+    """Calculate total open risk as % of equity.
+    Ported from AutoTrade's policy_engine total_risk_dollars calculation.
+    Estimates risk per position as 4% of current value (conservative proxy)."""
+    positions = client.get_all_positions()
+    total_risk = 0.0
+
+    for p in positions:
+        qty = abs(float(p.qty))
+        price = float(p.current_price)
+        # Conservative estimate: risk = 4% of position value
+        # (real implementation would track actual stop levels)
+        risk_per_share = price * 0.04
+        total_risk += qty * risk_per_share
+
+    return (total_risk / equity) * 100 if equity > 0 else 0
+
+
 # ── Load Screener Results ────────────────────────────────────────
 
-def load_screener_results(cfg, top_n=None, min_score=None):
+def load_screener_results(cfg: dict, top_n: int = None, min_score: float = None) -> pd.DataFrame:
     """Load and filter screener results."""
     csv_path = cfg.get("SCREENER_CSV", "screener_results.csv")
     if not os.path.exists(csv_path):
@@ -172,12 +242,12 @@ def load_screener_results(cfg, top_n=None, min_score=None):
 
     # Filter by minimum score
     if min_score is None:
-        min_score = cfg.get("MIN_SCORE_TO_TRADE", 60.0)
+        min_score = cfg.get("MIN_SCORE_TO_TRADE", 65.0)
     df = df[df["score"] >= min_score].copy()
 
     if df.empty:
         print(f"  No stocks scored {min_score}+ in {csv_path}.")
-        print("  Try lowering MIN_SCORE_TO_TRADE in trade_config.py.")
+        print("  Try lowering MIN_SCORE_TO_TRADE in your config.")
         return df
 
     # Limit to top N
@@ -189,7 +259,7 @@ def load_screener_results(cfg, top_n=None, min_score=None):
 
 # ── Get Current Positions ────────────────────────────────────────
 
-def get_open_positions(client):
+def get_open_positions(client) -> dict:
     """Get current open positions as a dict of {symbol: position}."""
     positions = client.get_all_positions()
     return {p.symbol: p for p in positions}
@@ -197,9 +267,9 @@ def get_open_positions(client):
 
 # ── Order Placement ──────────────────────────────────────────────
 
-def place_order(client, symbol, qty, side, order_type, time_in_force):
-    """Place a single order on Alpaca."""
-    from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
+def place_order(client, symbol: str, qty: int, side: str, order_type: str, time_in_force: str):
+    """Place a single market order on Alpaca."""
+    from alpaca.trading.requests import MarketOrderRequest
     from alpaca.trading.enums import OrderSide, TimeInForce
 
     alpaca_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
@@ -219,16 +289,39 @@ def place_order(client, symbol, qty, side, order_type, time_in_force):
     return order
 
 
+def place_bracket_order(client, symbol: str, qty: int,
+                        stop_price: float, target_price: float):
+    """Place a bracket order: market entry + stop-loss + take-profit.
+    Ported from AutoTrade's execution adapter bracket order support."""
+    from alpaca.trading.requests import MarketOrderRequest
+    from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
+
+    request = MarketOrderRequest(
+        symbol=symbol,
+        qty=qty,
+        side=OrderSide.BUY,
+        time_in_force=TimeInForce.GTC,  # Bracket orders need GTC
+        order_class=OrderClass.BRACKET,
+        take_profit={"limit_price": round(target_price, 2)},
+        stop_loss={"stop_price": round(stop_price, 2)},
+    )
+    return client.submit_order(request)
+
+
 # ── Trade Execution ──────────────────────────────────────────────
 
-def execute_trades(client, account, candidates, cfg, dry_run=False):
-    """Size and place orders for screener candidates."""
+def execute_trades(client, account, candidates: pd.DataFrame, cfg: dict,
+                   dry_run: bool = False) -> list:
+    """Size and place orders for screener candidates with full risk validation."""
     equity, cash = float(account.equity), float(account.cash)
     paper = cfg.get("PAPER_TRADING", True)
     order_type = cfg.get("ORDER_TYPE", "market")
     tif = cfg.get("TIME_IN_FORCE", "day")
     max_positions = cfg.get("MAX_POSITIONS", 10)
     cash_reserve_pct = cfg.get("MIN_CASH_RESERVE_PCT", 20.0) / 100.0
+    use_brackets = cfg.get("USE_BRACKET_ORDERS", True)
+    min_rr = cfg.get("MIN_RR_TO_TRADE", 1.5)
+    atr_stop_check = cfg.get("ATR_STOP_VALIDATION", True)
 
     # Get existing positions
     positions = get_open_positions(client)
@@ -242,6 +335,17 @@ def execute_trades(client, account, candidates, cfg, dry_run=False):
     print(f"  Open positions: {open_count} / {max_positions}")
     print(f"  Slots available: {slots_available}")
     print(f"  Cash available for trading: ${available_cash:,.2f} (keeping ${min_cash:,.2f} reserve)")
+
+    # Portfolio heat check (ported from AutoTrade policy_engine)
+    max_heat = cfg.get("PORTFOLIO_HEAT_MAX_PCT", 6.0)
+    heat = calculate_portfolio_heat(client, equity)
+    print(f"  Portfolio heat: {heat:.1f}% / {max_heat}% max")
+
+    if heat >= max_heat:
+        print(f"\n  Portfolio heat {heat:.1f}% >= {max_heat}% cap. No new trades.")
+        print("  Close or reduce existing positions first.")
+        return []
+
     print()
 
     if slots_available <= 0:
@@ -259,26 +363,40 @@ def execute_trades(client, account, candidates, cfg, dry_run=False):
 
         # Skip if already holding
         if symbol in positions:
-            print(f"  {symbol}: SKIP — already holding a position")
+            print(f"  {symbol}: SKIP -- already holding a position")
             continue
 
         entry = row.get("entry_price", row["Close"])
         stop = row.get("stop_price", entry * 0.96)
+        target = row.get("target_price", entry * 1.04)
+        score = row.get("score", 65)
+        atr_pct = row.get("atr_pct", 0)
 
-        # R-Unit sizing
-        qty = calculate_position_size(entry, stop, equity, cfg)
+        # R:R validation
+        risk = entry - stop
+        rr = row.get("risk_reward", (target - entry) / risk if risk > 0 else 0)
+        if rr < min_rr:
+            print(f"  {symbol}: SKIP -- R:R {rr:.1f} < minimum {min_rr}")
+            continue
+
+        # ATR stop validation (verify stop distance is meaningful)
+        if atr_stop_check and atr_pct > 0:
+            stop_dist_pct = abs(entry - stop) / entry * 100 if entry > 0 else 0
+            min_stop_atr_mult = 1.5
+            if stop_dist_pct < atr_pct * min_stop_atr_mult:
+                print(f"  {symbol}: SKIP -- stop too tight ({stop_dist_pct:.1f}% < {min_stop_atr_mult}x ATR {atr_pct:.1f}%)")
+                continue
+
+        # R-Unit sizing with conviction scaling
+        qty = calculate_position_size(entry, stop, equity, cfg, score=score)
         if qty <= 0:
-            print(f"  {symbol}: SKIP — position too small (entry=${entry:.2f}, stop=${stop:.2f})")
+            print(f"  {symbol}: SKIP -- position too small (entry=${entry:.2f}, stop=${stop:.2f})")
             continue
 
         cost = qty * entry
         if cost > available_cash:
-            print(f"  {symbol}: SKIP — insufficient cash (need ${cost:,.2f}, have ${available_cash:,.2f})")
+            print(f"  {symbol}: SKIP -- insufficient cash (need ${cost:,.2f}, have ${available_cash:,.2f})")
             continue
-
-        target = row.get("target_price", entry * 1.04)
-        risk = entry - stop
-        rr = row.get("risk_reward", (target - entry) / risk if risk > 0 else 0)
 
         orders_planned.append({
             "symbol": symbol,
@@ -288,32 +406,36 @@ def execute_trades(client, account, candidates, cfg, dry_run=False):
             "target": target,
             "risk_reward": rr,
             "cost": cost,
-            "score": row["score"],
+            "score": score,
             "scan_type": row.get("scan_type", "general"),
         })
 
         available_cash -= cost
 
     if not orders_planned:
-        print("  No trades to place — all candidates filtered out.")
+        print("  No trades to place -- all candidates filtered out.")
         return []
 
     # Display order plan
-    print(f"  {'─' * 75}")
-    print(f"  {'Symbol':<8} {'Qty':>5} {'Entry':>9} {'Stop':>9} {'Target':>9} {'R:R':>5} {'Cost':>11} {'Score':>6}")
-    print(f"  {'─' * 75}")
+    print(f"  {'─' * 80}")
+    print(f"  {'Symbol':<8} {'Qty':>5} {'Entry':>9} {'Stop':>9} {'Target':>9} "
+          f"{'R:R':>5} {'Cost':>11} {'Score':>6} {'Type':<10}")
+    print(f"  {'─' * 80}")
 
     total_cost = 0
     for o in orders_planned:
+        scan = o["scan_type"][:10]
         print(f"  {o['symbol']:<8} {o['qty']:>5} ${o['entry']:>7.2f} ${o['stop']:>7.2f} "
-              f"${o['target']:>7.2f} {o['risk_reward']:>4.1f}x ${o['cost']:>9,.2f} {o['score']:>5.0f}")
+              f"${o['target']:>7.2f} {o['risk_reward']:>4.1f}x ${o['cost']:>9,.2f} "
+              f"{o['score']:>5.0f} {scan:<10}")
         total_cost += o["cost"]
-    print(f"  {'─' * 75}")
-    print(f"  Total: {len(orders_planned)} orders  |  ${total_cost:>,.2f}")
+    print(f"  {'─' * 80}")
+    order_type_label = "BRACKET" if use_brackets else "MARKET"
+    print(f"  Total: {len(orders_planned)} orders  |  ${total_cost:>,.2f}  |  {order_type_label} orders")
     print()
 
     if dry_run:
-        print("  DRY RUN — no orders placed.")
+        print("  DRY RUN -- no orders placed.")
         return orders_planned
 
     # Confirmation gate
@@ -322,23 +444,44 @@ def execute_trades(client, account, candidates, cfg, dry_run=False):
         print(f"  Mode: {mode_label}")
         response = input(f"  Place these {len(orders_planned)} orders? (yes/no): ").strip().lower()
         if response not in ("yes", "y"):
-            print("  Cancelled — no orders placed.")
+            print("  Cancelled -- no orders placed.")
             return []
 
     # Place orders
     placed = []
     for o in orders_planned:
         try:
-            order = place_order(client, o["symbol"], o["qty"], "buy", order_type, tif)
+            if use_brackets:
+                order = place_bracket_order(
+                    client, o["symbol"], o["qty"], o["stop"], o["target"]
+                )
+            else:
+                order = place_order(client, o["symbol"], o["qty"], "buy", order_type, tif)
+
             status = getattr(order, "status", "submitted")
             order_id = str(getattr(order, "id", ""))
-            print(f"  ✓ {o['symbol']}: {o['qty']} shares — {status} (ID: {order_id[:8]}...)")
+            bracket_label = " [BRACKET]" if use_brackets else ""
+            print(f"  + {o['symbol']}: {o['qty']} shares -- {status} (ID: {order_id[:8]}...){bracket_label}")
             o["order_id"] = order_id
             o["status"] = str(status)
             o["timestamp"] = datetime.now().isoformat()
             placed.append(o)
         except Exception as e:
-            print(f"  ✗ {o['symbol']}: FAILED — {e}")
+            print(f"  x {o['symbol']}: FAILED -- {e}")
+            # If bracket fails, try plain market order as fallback
+            if use_brackets:
+                try:
+                    order = place_order(client, o["symbol"], o["qty"], "buy", order_type, tif)
+                    status = getattr(order, "status", "submitted")
+                    order_id = str(getattr(order, "id", ""))
+                    print(f"    + {o['symbol']}: fallback market order -- {status}")
+                    o["order_id"] = order_id
+                    o["status"] = str(status)
+                    o["timestamp"] = datetime.now().isoformat()
+                    placed.append(o)
+                    continue
+                except Exception as e2:
+                    print(f"    x {o['symbol']}: fallback also failed -- {e2}")
             o["order_id"] = ""
             o["status"] = f"failed: {e}"
             o["timestamp"] = datetime.now().isoformat()
@@ -349,7 +492,7 @@ def execute_trades(client, account, candidates, cfg, dry_run=False):
 
 # ── Trade Log ────────────────────────────────────────────────────
 
-def save_trade_log(trades, cfg):
+def save_trade_log(trades: list, cfg: dict):
     """Append placed trades to the trade log CSV."""
     if not trades:
         return
@@ -367,9 +510,13 @@ def save_trade_log(trades, cfg):
 
 # ── Show Status ──────────────────────────────────────────────────
 
-def show_status(client, account, paper):
+def show_status(client, account, paper: bool):
     """Display current positions and P&L."""
-    print_account_summary(account, paper)
+    equity, cash = print_account_summary(account, paper)
+
+    # Portfolio heat
+    heat = calculate_portfolio_heat(client, float(account.equity))
+    print(f"  Portfolio heat: {heat:.1f}%\n")
 
     positions = client.get_all_positions()
     if not positions:
