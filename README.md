@@ -84,7 +84,14 @@ docker compose run --rm yfinance python downloader.py --update-screener --all
 docker compose run --rm yfinance python generate.py
 ```
 
-The `docker-compose.yml` mounts your project folder into the container — all output files (CSVs, parquet) appear on your machine automatically.
+> **💾 Your data is persistent.** The `docker-compose.yml` bind-mounts your project folder (`volumes: - .:/app`), so all downloaded CSVs and generated Parquet files are written directly to your machine — not inside the container. You can stop, rebuild, or remove the container at any time without losing data. Your files will always be in the `YfinanceDownloader/` folder:
+>
+> | File | Location on your machine |
+> |------|-------------------------|
+> | `prices_daily.csv` | `YfinanceDownloader/prices_daily.csv` |
+> | `prices_hourly.csv` | `YfinanceDownloader/prices_hourly.csv` |
+> | `daily_features.parquet` | `YfinanceDownloader/daily_features.parquet` |
+> | `config.py` | `YfinanceDownloader/config.py` |
 
 ---
 
