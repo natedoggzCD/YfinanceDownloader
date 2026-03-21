@@ -12,7 +12,9 @@
 
 ---
 
-Downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), and transforms the raw prices into **60+ ML-ready technical features** — moving averages, momentum indicators, volatility metrics, lag features, and rolling statistics — all saved to a compact Parquet file. No terminal required.
+**Accurate data is the foundation of every trading strategy, ML model, and backtest.** If your prices are stale, your listings are outdated, or your features are miscalculated, nothing built on top of that data can be trusted. YfinanceDownloader solves this by giving you a single source of truth — clean, current, and complete NASDAQ price data that stays in sync automatically.
+
+It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), and transforms the raw prices into **60+ ML-ready technical features** — moving averages, momentum indicators, volatility metrics, lag features, and rolling statistics — all saved to a compact Parquet file. No terminal required.
 
 Three batch files do all the work:
 
