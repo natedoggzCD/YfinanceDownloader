@@ -15,7 +15,7 @@ echo ============================================================
 echo Installation Complete!
 echo.
 echo Running setup validation...
-python validate_setup.py
+python src/validate_setup.py
 echo.
 echo ============================================================
 pause

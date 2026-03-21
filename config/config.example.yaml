@@ -12,9 +12,9 @@ data:
   min_price: 2.00                # Minimum stock price ($)
   max_price: 200.00              # Maximum stock price ($)
   start_date: "2018-01-02"       # Historical data start date
-  daily_csv: "prices_daily.csv"
-  hourly_csv: "prices_hourly.csv"
-  nasdaq_screener: "nasdaq_screener.csv"
+  daily_csv: "data/prices_daily.csv"
+  hourly_csv: "data/prices_hourly.csv"
+  nasdaq_screener: "data/nasdaq_screener.csv"
   batch_size: 50                 # Tickers per download batch
   stale_ticker_days: 5           # Skip tickers with no data in this many days
   hourly_max_days: 729           # Yahoo Finance hourly data limit (~2 years)
@@ -22,8 +22,8 @@ data:
 # ── Stock Screener Settings ─────────────────────────────────────
 screener:
   # Input / Output
-  features_parquet: "daily_features.parquet"
-  output_csv: "screener_results.csv"
+  features_parquet: "data/daily_features.parquet"
+  output_csv: "data/screener_results.csv"
   top_n: 50                      # Number of top picks to output
 
   # Universe filters
@@ -140,5 +140,5 @@ trading:
   atr_stop_validation: true      # Verify stop >= 1.5x ATR
 
   # Files
-  screener_csv: "screener_results.csv"
-  trade_log_csv: "trade_log.csv"
+  screener_csv: "data/screener_results.csv"
+  trade_log_csv: "logs/trade_log.csv"

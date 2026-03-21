@@ -47,18 +47,18 @@ def _load_yaml_config(yaml_path: str) -> dict:
 
     # Also load screener section for shared settings
     scr = raw.get("screener", {})
-    cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "daily_features.parquet")
-    cfg["OUTPUT_CSV"] = scr.get("output_csv", "screener_results.csv")
+    cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "data/daily_features.parquet")
+    cfg["OUTPUT_CSV"] = scr.get("output_csv", "data/screener_results.csv")
     if "SCREENER_CSV" not in cfg:
-        cfg["SCREENER_CSV"] = cfg.get("OUTPUT_CSV", "screener_results.csv")
+        cfg["SCREENER_CSV"] = cfg.get("OUTPUT_CSV", "data/screener_results.csv")
 
     return cfg
 
 
-def load_config() -> dict:
+def load_config() -> dict:`n    import sys`n    import os`n    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`n    if config_dir not in sys.path:`n        sys.path.append(config_dir)`n
     """Load config.yaml first, fall back to trade_config.py / trade_config.example.py."""
     # Try YAML first
-    yaml_cfg = _load_yaml_config("config.yaml")
+    yaml_cfg = _load_yaml_config("config/config.yaml")
     if yaml_cfg:
         return yaml_cfg
 
@@ -227,7 +227,7 @@ def calculate_portfolio_heat(client, equity: float) -> float:
 
 def load_screener_results(cfg: dict, top_n: int = None, min_score: float = None) -> pd.DataFrame:
     """Load and filter screener results."""
-    csv_path = cfg.get("SCREENER_CSV", "screener_results.csv")
+    csv_path = cfg.get("SCREENER_CSV", "data/screener_results.csv")
     if not os.path.exists(csv_path):
         print(f"ERROR: {csv_path} not found.")
         print("Run the screener first:  python screener.py")
@@ -497,7 +497,7 @@ def save_trade_log(trades: list, cfg: dict):
     if not trades:
         return
 
-    log_path = cfg.get("TRADE_LOG_CSV", "trade_log.csv")
+    log_path = cfg.get("logs/trade_log.csv", "logs/trade_log.csv")
     df = pd.DataFrame(trades)
 
     if os.path.exists(log_path):

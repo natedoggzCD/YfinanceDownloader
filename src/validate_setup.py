@@ -50,8 +50,8 @@ def check_config():
     print_step("Checking configuration...")
     
     # Check for config.yaml or config.py
-    has_yaml = os.path.exists("config.yaml")
-    has_py = os.path.exists("config.py")
+    has_yaml = os.path.exists("config/config.yaml")
+    has_py = os.path.exists("config/config.py")
     
     if not has_yaml and not has_py:
         print_err("No config.yaml or config.py found.")
@@ -75,7 +75,7 @@ def check_alpaca(cfg_type):
     if cfg_type == "yaml":
         try:
             import yaml
-            with open("config.yaml", "r") as f:
+            with open("config/config.yaml", "r") as f:
                 raw = yaml.safe_load(f) or {}
                 trading = raw.get("trading", {})
                 key = trading.get("alpaca_api_key", "")
@@ -84,7 +84,7 @@ def check_alpaca(cfg_type):
             pass
     else:
         try:
-            import config
+            from config import config
             key = getattr(config, "ALPACA_API_KEY", "")
             secret = getattr(config, "ALPACA_SECRET_KEY", "")
         except:
@@ -99,10 +99,10 @@ def check_alpaca(cfg_type):
 def check_data_files():
     print_step("Checking data files...")
     files = {
-        "nasdaq_screener.csv": "Required for downloader.py",
-        "prices_daily.csv": "Created by daily.bat",
-        "daily_features.parquet": "Created by generate.bat",
-        "screener_results.csv": "Created by screen.bat"
+        "data/nasdaq_screener.csv": "Required for downloader.py",
+        "data/prices_daily.csv": "Created by daily.bat",
+        "data/daily_features.parquet": "Created by generate.bat",
+        "data/screener_results.csv": "Created by screen.bat"
     }
     
     for f, desc in files.items():
@@ -110,7 +110,7 @@ def check_data_files():
             size = os.path.getsize(f) / (1024 * 1024)
             print_ok(f"{f} exists ({size:.1f} MB)")
         else:
-            if f == "nasdaq_screener.csv":
+            if f == "data/nasdaq_screener.csv":
                 print_err(f"{f} MISSING. {desc}")
                 print("    Download from: https://www.nasdaq.com/market-activity/stocks/screener")
             else:

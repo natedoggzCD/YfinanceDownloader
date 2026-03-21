@@ -15,7 +15,7 @@ Usage:
     daily.bat                            # One-click: runs --all (Windows)
 """
 
-import argparse
+import argparse`nimport sys`nimport os`nconfig_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`nif config_dir not in sys.path:`n    sys.path.append(config_dir)
 import logging
 import re
 import sys

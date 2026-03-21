@@ -45,13 +45,13 @@ set /p choice="  Enter 1, 2, or 3: "
 
 if "%choice%"=="1" (
     echo.
-    python trader.py --dry-run
+    python src/trader.py --dry-run
 ) else if "%choice%"=="2" (
     echo.
-    python trader.py
+    python src/trader.py
 ) else if "%choice%"=="3" (
     echo.
-    python trader.py --status
+    python src/trader.py --status
 ) else (
     echo.
     echo   Invalid choice.

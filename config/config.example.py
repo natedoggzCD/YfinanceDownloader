@@ -15,9 +15,9 @@ START_DATE = "2018-01-02"
 END_DATE = None  # Set to None to use current date
 
 # Data file paths
-DAILY_CSV = "prices_daily.csv"
-HOURLY_CSV = "prices_hourly.csv"
-NASDAQ_SCREENER = "nasdaq_screener.csv"
+DAILY_CSV = "data/prices_daily.csv"
+HOURLY_CSV = "data/prices_hourly.csv"
+NASDAQ_SCREENER = "data/nasdaq_screener.csv"
 
 # Rate limiting settings (to avoid hitting API limits)
 BATCH_SIZE = 50  # Number of stocks to download per batch

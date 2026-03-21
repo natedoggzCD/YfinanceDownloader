@@ -24,9 +24,9 @@ if not exist "daily_features.parquet" (
 
 set /p USE_AI="Enable AI trade summaries? Requires API key in screen_config.py (Y/N): "
 if /I "%USE_AI%"=="Y" (
-    python screener.py --ai
+    python src/screener.py --ai
 ) else (
-    python screener.py
+    python src/screener.py
 )
 
 echo.

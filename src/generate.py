@@ -12,7 +12,7 @@ Usage:
     python generate.py --stale-days 5                   # Skip tickers stale > 5 days
 """
 
-import argparse
+import argparse`nimport sys`nimport os`nconfig_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`nif config_dir not in sys.path:`n    sys.path.append(config_dir)
 from datetime import timedelta
 
 import numpy as np
@@ -298,8 +298,8 @@ def load_daily_data(file_path):
 
 
 def generate_features(
-    daily_path="prices_daily.csv",
-    output_path="daily_features.parquet",
+    daily_path="data/prices_daily.csv",
+    output_path="data/daily_features.parquet",
     min_obs=100,
     stale_days=None,
 ):
@@ -467,7 +467,7 @@ Examples:
     )
     parser.add_argument(
         "--output",
-        default="daily_features.parquet",
+        default="data/daily_features.parquet",
         help="Path for output Parquet file (default: daily_features.parquet)",
     )
     parser.add_argument(

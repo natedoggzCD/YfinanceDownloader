@@ -52,8 +52,8 @@ def _load_yaml_config(yaml_path: str) -> dict:
 
     # Screener section
     scr = raw.get("screener", {})
-    cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "daily_features.parquet")
-    cfg["OUTPUT_CSV"] = scr.get("output_csv", "screener_results.csv")
+    cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "data/daily_features.parquet")
+    cfg["OUTPUT_CSV"] = scr.get("output_csv", "data/screener_results.csv")
     cfg["TOP_N"] = scr.get("top_n", 50)
     cfg["MIN_PRICE"] = scr.get("min_price", 1.0)
     cfg["MAX_PRICE"] = scr.get("max_price", 350.0)
@@ -121,10 +121,10 @@ def _load_yaml_config(yaml_path: str) -> dict:
     return cfg
 
 
-def load_config() -> dict:
+def load_config() -> dict:`n    import sys`n    import os`n    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`n    if config_dir not in sys.path:`n        sys.path.append(config_dir)`n
     """Load config.yaml first, fall back to screen_config.py / screen_config.example.py."""
     # Try YAML first
-    yaml_cfg = _load_yaml_config("config.yaml")
+    yaml_cfg = _load_yaml_config("config/config.yaml")
     if yaml_cfg:
         return yaml_cfg
 
@@ -828,8 +828,8 @@ def main():
         cfg["SCAN_BREAKOUT"] = args.scan in ("breakout", "all")
         cfg["SCAN_PULLBACK_ENTRY"] = args.scan in ("pullback", "all")
 
-    input_file = args.input or cfg.get("FEATURES_PARQUET", "daily_features.parquet")
-    output_file = args.output or cfg.get("OUTPUT_CSV", "screener_results.csv")
+    input_file = args.input or cfg.get("FEATURES_PARQUET", "data/daily_features.parquet")
+    output_file = args.output or cfg.get("OUTPUT_CSV", "data/screener_results.csv")
     top_n = args.top or cfg.get("TOP_N", 50)
 
     print()
