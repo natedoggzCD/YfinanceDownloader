@@ -2,9 +2,7 @@
 
 # 📈 YfinanceDownloader
 
-**Bulk-download daily & hourly OHLCV stock data for every NASDAQ-listed ticker, then generate ML-ready technical features.**
-
-Filtered by price range · Incrementally updated · Synced with current listings · Feature engineering built in
+**Free OHLCV stock data for the entire NASDAQ — updated daily with a double-click.**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
@@ -14,65 +12,103 @@ Filtered by price range · Incrementally updated · Synced with current listings
 
 ---
 
-A command-line Python tool that downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for all stocks on the NASDAQ exchange. It maintains local CSV files of daily and hourly prices that stay automatically synchronized with current NASDAQ listings — new IPOs get added, delisted stocks get removed, and your data stays up to date with a single command or a double-click of `daily.bat`.
+Downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock and saves it to local CSV files. New IPOs get added, delisted stocks get removed, and your data stays current — all without opening a terminal.
 
-It also includes a **feature engineering pipeline** (`generate.py`) that computes 60+ technical indicators, lag features, and rolling statistics from the daily data and saves the result to a compact HDF5 file ready for ML or analysis.
+Three batch files do all the work:
+
+| Double-click this | What it does |
+|-------------------|-------------|
+| **`install.bat`** | Installs all Python dependencies (one-time setup) |
+| **`daily.bat`** | Downloads / updates all stock price data |
+| **`generate.bat`** | Builds 60+ technical features for ML from your data |
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (Windows — No Terminal Needed)
 
-```bash
+> **Prerequisite:** Install Python 3.8+ from [python.org](https://www.python.org/downloads/) (check "Add to PATH" during install).
+
+### 1. Download the project
+
+Download and unzip this repo, or clone it:
+```
 git clone https://github.com/natedoggzCD/YfinanceDownloader.git
-cd YfinanceDownloader
-pip install -r requirements.txt
-cp config.example.py config.py   # Create your local config
 ```
 
-> **Prerequisite:** Python 3.8+ must be installed. Download it from [python.org](https://www.python.org/downloads/) or run `winget install Python.Python.3.11` from a command prompt.
+### 2. Set up (one time)
 
-1. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
-2. Edit `config.py` to set your preferred price range and settings.
-3. **Double-click `daily.bat`** (Windows) — or run `python downloader.py --all` from a terminal.
+1. **Double-click `install.bat`** — installs all Python packages automatically.
+2. Copy `config.example.py` to `config.py` — edit it to set your price range if you want (defaults work fine).
+3. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
 
-That's it. On the first run it downloads all historical data; on every run after that it only fetches new bars. The output files `prices_daily.csv` and `prices_hourly.csv` are created automatically.
+### 3. Get your data
 
-> **Note:** The first run downloads 1,000+ stocks and takes several hours due to rate limiting. Every run after that is fast.
+**Double-click `daily.bat`** — it will ask if you want to update the screener first, then downloads everything.
+
+That's it. Two CSV files appear: `prices_daily.csv` and `prices_hourly.csv`.
+
+### 4. Keep it updated
+
+**Double-click `daily.bat` anytime** to pull the latest prices. It only downloads new data, so repeat runs are fast.
+
+### 5. Generate ML features (optional)
+
+**Double-click `generate.bat`** to produce `daily_features.parquet` with 60+ technical indicators ready for analysis or machine learning.
+
+> **First run note:** The initial download covers 1,000+ stocks and takes several hours due to Yahoo Finance rate limits. Every run after that is fast.
+
+---
+
+## 🖱️ Batch File Reference
+
+### `install.bat`
+
+Runs `pip install -r requirements.txt`. Double-click once after downloading the project.
+
+### `daily.bat`
+
+Prompts whether to refresh the NASDAQ screener, then runs the full pipeline:
+1. **Initializes** data if no CSVs exist yet (first run)
+2. **Reconciles** tickers with the NASDAQ screener (adds new IPOs, removes delisted)
+3. **Updates** your CSVs with the latest price bars
+
+### `generate.bat`
+
+Runs the feature engineering pipeline. Reads `prices_daily.csv` and produces `daily_features.parquet` with 60+ indicators.
+
+---
+
+## 💻 Terminal / Command-Line Usage
+
+If you prefer the command line (or you're on Mac/Linux), everything works from a terminal too:
+
+```bash
+cd YfinanceDownloader
+pip install -r requirements.txt
+cp config.example.py config.py
+python downloader.py --all
+```
 
 ---
 
 ## 🐳 Running with Docker
 
-If you don't want to manage a local Python environment, you can run the downloader seamlessly via Docker. The provided `docker-compose.yml` mounts your current directory into the container, so config changes and output data files (`.csv`, `.parquet`) are automatically synced to your host machine.
+If you don't want to install Python at all, use Docker:
 
 ```bash
-# 1. Ensure you have your config.py and nasdaq_screener.csv ready
 cp config.example.py config.py
 
-# 2. Build and run (this runs the default daily update)
+# Build and run (daily update)
 docker compose up --build
 
-# Or to run arbitrary commands (like feature generation)
+# Update screener + download data
+docker compose run --rm yfinance python downloader.py --update-screener --all
+
+# Generate features
 docker compose run --rm yfinance python generate.py
 ```
 
----
-
-## 🔄 Keeping Data Updated
-
-| Method | How | Best for |
-|--------|-----|----------|
-| **`daily.bat`** | Double-click the file | Easiest — no terminal needed (Windows) |
-| **`generate.bat`** | Double-click the file | Generate features after updating (Windows) |
-| `python downloader.py --all` | Run from terminal | Cross-platform, same as daily.bat |
-| `python downloader.py --update` | Run from terminal | Quick update only (skip reconciliation) |
-
-`daily.bat` runs `python downloader.py --all` under the hood, which:
-1. **Initializes** data if no CSVs exist yet (first run)
-2. **Reconciles** tickers with the NASDAQ screener (adds new IPOs, removes delisted)
-3. **Updates** your CSVs with the latest price bars
-
-Just double-click it daily and your data stays current.
+The `docker-compose.yml` mounts your current directory into the container, so output files sync to your machine automatically.
 
 ---
 
@@ -83,11 +119,12 @@ Just double-click it daily and your data stays current.
 | `python downloader.py --init` | First-time download of all NASDAQ stocks in your price range |
 | `python downloader.py --update` | Append new bars since the last download |
 | `python downloader.py --reconcile` | Add new IPOs, remove delisted tickers from your CSVs |
+| `python downloader.py --update-screener` | Uses Playwright to download the latest NASDAQ Screener CSV |
 | `python downloader.py --all` | Reconcile + update (+ init if no data exists yet) |
 | `python downloader.py --dry-run` | Preview changes without downloading anything |
 | `python downloader.py --tickers AAPL MSFT` | Process only specific tickers |
 | `python generate.py` | Generate technical features → `daily_features.parquet` |
-| **`daily.bat`** | **One-click wrapper** — runs `--all` (Windows) |
+| **`daily.bat`** | **One-click wrapper** — runs `--all` and prompts to update screener (Windows) |
 | **`generate.bat`** | **One-click wrapper** — runs `generate.py` (Windows) |
 
 ### Examples
@@ -285,8 +322,6 @@ aapl = df[df['ticker'] == 'AAPL']
 > **Note:** Requires `pyarrow` — included in `requirements.txt`.
 
 ---
-
-## 🛡️ Robustness Features
 
 ## 🛡️ Robustness Features
 
