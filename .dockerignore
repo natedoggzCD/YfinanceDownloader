@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore local datasets and configs to keep build context small
+prices_daily.csv
+prices_hourly.csv
+daily_features.parquet
+config.py
+nasdaq_screener.csv

@@ -1,0 +1,11 @@
+services:
+  yfinance:
+    build: .
+    image: yfinance-downloader
+    container_name: yfinance-downloader
+    # Mount the entire current directory to /app
+    # This allows config.py, nasdaq_screener.csv, and outputs like CSV/Parquet to automatically reflect locally
+    volumes:
+      - .:/app
+    # Run the standard daily sync procedure by default
+    command: python downloader.py --all

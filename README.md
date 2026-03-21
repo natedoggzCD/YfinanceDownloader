@@ -41,6 +41,23 @@ That's it. On the first run it downloads all historical data; on every run after
 
 ---
 
+## 🐳 Running with Docker
+
+If you don't want to manage a local Python environment, you can run the downloader seamlessly via Docker. The provided `docker-compose.yml` mounts your current directory into the container, so config changes and output data files (`.csv`, `.parquet`) are automatically synced to your host machine.
+
+```bash
+# 1. Ensure you have your config.py and nasdaq_screener.csv ready
+cp config.example.py config.py
+
+# 2. Build and run (this runs the default daily update)
+docker compose up --build
+
+# Or to run arbitrary commands (like feature generation)
+docker compose run --rm yfinance python generate.py
+```
+
+---
+
 ## 🔄 Keeping Data Updated
 
 | Method | How | Best for |
