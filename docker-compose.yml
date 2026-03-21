@@ -8,4 +8,6 @@ services:
     volumes:
       - .:/app
     # Run the standard daily sync procedure by default
+    # To also update the NASDAQ screener CSV via Playwright, change this to:
+    # command: python downloader.py --update-screener --all
     command: python downloader.py --all

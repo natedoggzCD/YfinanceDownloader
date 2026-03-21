@@ -831,13 +831,16 @@ Examples:
         "--all", action="store_true", help="Run reconcile, update, and init if needed"
     )
     parser.add_argument(
+        "--update-screener", action="store_true", help="Update NASDAQ screener CSV using Playwright first"
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Preview changes without downloading"
     )
     parser.add_argument("--tickers", nargs="+", help="Specific tickers to process")
 
     args = parser.parse_args()
 
-    if not any([args.init, args.update, args.reconcile, args.all]):
+    if not any([args.init, args.update, args.reconcile, args.all, args.update_screener]):
         parser.print_help()
         sys.exit(0)
 
@@ -864,6 +867,17 @@ Examples:
     if args.tickers:
         print(f"\n  --tickers flag provided: bypassing ${MIN_PRICE}-${MAX_PRICE} price filter")
         print(f"  Tickers requested: {', '.join(args.tickers)}")
+
+    # Update NASDAQ Screener CSV if requested
+    if args.update_screener:
+        try:
+            from update_screener import download_screener_csv
+            download_screener_csv(output_path=NASDAQ_SCREENER)
+        except ImportError as e:
+            print(f"\n  [ERROR] Could not import update_screener: {e}")
+            print(f"  Make sure playwright is installed (pip install playwright && playwright install)")
+        except Exception as e:
+            print(f"\n  [ERROR] Failed to update screener: {e}")
 
     # Reconcile
     if args.reconcile or args.all:
