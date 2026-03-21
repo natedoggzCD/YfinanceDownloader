@@ -14,15 +14,21 @@
 
 **Accurate data is the foundation of every trading strategy, ML model, and backtest.** If your prices are stale, your listings are outdated, or your features are miscalculated, nothing built on top of that data can be trusted. YfinanceDownloader solves this by giving you a single source of truth — clean, current, and complete NASDAQ price data that stays in sync automatically.
 
-It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), and transforms the raw prices into **60+ ML-ready technical features** — moving averages, momentum indicators, volatility metrics, lag features, and rolling statistics — all saved to a compact Parquet file. No terminal required.
+It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), transforms the raw prices into **60+ ML-ready technical features**, and then **scores every stock** across momentum, trend, volume, and volatility factors — giving you ranked trade candidates with entry/stop/target prices. No terminal required.
 
-Three batch files do all the work:
+Four batch files do all the work:
 
 | Double-click this | What it does |
 |-------------------|-------------|
 | **`install.bat`** | Installs all Python dependencies (one-time setup) |
 | **`daily.bat`** | Downloads / updates all stock price data |
 | **`generate.bat`** | Builds 60+ technical features for ML from your data |
+| **`screen.bat`** | Scores all stocks and outputs today's top trade candidates |
+
+```
+daily.bat  →  generate.bat  →  screen.bat
+(download)    (features)       (trade picks)
+```
 
 ---
 
@@ -48,7 +54,9 @@ git clone https://github.com/natedoggzCD/YfinanceDownloader.git
 
 **4. Keep it updated** — **double-click `daily.bat` anytime**. It only downloads new data, so repeat runs are fast.
 
-**5. Generate ML features (optional)** — **double-click `generate.bat`** to produce `daily_features.parquet` with 60+ technical indicators.
+**5. Generate ML features** — **double-click `generate.bat`** to produce `daily_features.parquet` with 60+ technical indicators.
+
+**6. Screen for trade candidates** — **double-click `screen.bat`** to score every stock and get ranked picks with entry/stop/target prices saved to `screener_results.csv`.
 
 ---
 
@@ -79,9 +87,16 @@ docker compose up --build
 docker compose run --rm yfinance python downloader.py --update-screener --all
 ```
 
-**5. Generate ML features (optional):**
+**5. Generate ML features:**
 ```bash
 docker compose run --rm yfinance python generate.py
+```
+
+**6. Screen for trade candidates:**
+```bash
+docker compose run --rm yfinance python screener.py
+# With AI summaries:
+docker compose run --rm yfinance python screener.py --ai
 ```
 
 > **💾 Your data is persistent.** The `docker-compose.yml` bind-mounts your project folder (`volumes: - .:/app`), so all downloaded CSVs and generated Parquet files are written directly to your machine — not inside the container. You can stop, rebuild, or remove the container at any time without losing data. Your files will always be in the `YfinanceDownloader/` folder:
@@ -115,6 +130,86 @@ Prompts whether to refresh the NASDAQ screener, then runs the full pipeline:
 ### `generate.bat`
 
 Runs the feature engineering pipeline. Reads `prices_daily.csv` and produces `daily_features.parquet` with 60+ indicators.
+
+### `screen.bat`
+
+Scores every stock in `daily_features.parquet` across momentum, trend, volume, pullback, and volatility factors. Outputs ranked trade candidates with entry/stop/target prices to `screener_results.csv`. Optionally asks if you want AI-powered trade summaries (requires an API key in `screen_config.py`).
+
+---
+
+## 🎯 Stock Screener
+
+The screener uses quantitative scoring logic ported from the [AutoTrade](https://github.com/natedoggzCD) trading system — no LLM, no GPU, no machine learning required. Pure rule-based signal scoring.
+
+### Signal Families
+
+| Scan Type | What it looks for | Key Thresholds |
+|-----------|-------------------|----------------|
+| **Momentum Breakout** | Trending stocks with volume expansion | Weekly return > 1%, RSI 30-70, volume > 1.5x avg, price > SMA20 |
+| **Mean Reversion** | Oversold bounce candidates | Weekly return < -3%, RSI < 35, volume > 2x avg (capitulation) |
+| **Breakout** | Bollinger squeeze releasing | BB width contracting, volume confirmation > 1.5x |
+
+### Scoring Factors (Weighted to 100)
+
+| Factor | Weight | What it measures |
+|--------|--------|-----------------|
+| **Momentum** | 30% | ROC, MACD histogram, weekly return |
+| **Volume** | 25% | Current volume vs 20-day average |
+| **Volatility** | 20% | ATR in optimal range (1.5% ideal) |
+| **Trend** | 15% | SMA alignment (20/50/200) + ADX strength |
+| **Pullback** | 10% | RSI sweet-spot for entry timing |
+
+### Output: `screener_results.csv`
+
+Each row is a ranked trade candidate with:
+
+```
+ticker, Close, score, scan_type, entry_price, stop_price, target_price, risk_reward,
+momentum_score, trend_score, volume_score, pullback_score, volatility_score, atr_pct
+```
+
+### AI Trade Summaries (Optional)
+
+Set an API key in `screen_config.py` to get AI-generated 2-3 sentence trade summaries for your top picks. Works with:
+
+- **OpenAI** — `gpt-4o-mini` (cheap) or `gpt-4o` (best)
+- **Any OpenAI-compatible API** — Ollama, LM Studio, vLLM, etc. (just change `AI_BASE_URL`)
+
+No API key? The screener works perfectly without it — pure quantitative scoring.
+
+### Screener Commands
+
+```bash
+python screener.py                     # Run with defaults
+python screener.py --top 20            # Show top 20 only
+python screener.py --scan momentum     # Only momentum breakout scan
+python screener.py --scan reversion    # Only mean reversion scan
+python screener.py --ai                # Enable AI summaries
+python screener.py --output picks.csv  # Custom output file
+```
+
+### Screener Configuration
+
+Copy `screen_config.example.py` to `screen_config.py` and edit thresholds:
+
+```python
+# Universe filters
+MIN_PRICE = 1.00            # Min stock price
+MAX_PRICE = 350.00          # Max stock price
+MIN_AVG_VOLUME = 500_000    # Min 20-day avg volume
+
+# Scoring weights (must sum to 1.0)
+WEIGHT_MOMENTUM   = 0.30
+WEIGHT_VOLUME     = 0.25
+WEIGHT_VOLATILITY = 0.20
+WEIGHT_TREND      = 0.15
+WEIGHT_PULLBACK   = 0.10
+
+# AI (optional)
+AI_API_KEY = ""                            # Your key (or "" to disable)
+AI_BASE_URL = "https://api.openai.com/v1"  # Change for local models
+AI_MODEL = "gpt-4o-mini"
+```
 
 ---
 
@@ -280,16 +375,21 @@ NASDAQ Screener ──► Filter by price range ──► Compare with local CSV
 
 ```
 YfinanceDownloader/
-├── downloader.py        # Core script — download, update, reconcile
-├── generate.py          # Feature engineering → daily_features.parquet
-├── config.example.py    # Configuration template (copy to config.py)
-├── config.py            # Your local settings (gitignored)
-├── daily.bat            # One-click daily update (Windows)
-├── generate.bat         # One-click feature generation (Windows)
-├── nasdaq_screener.csv  # NASDAQ stock listing (you download this)
-├── requirements.txt     # Python dependencies
-├── EXAMPLES.md          # Additional usage examples
-├── LICENSE              # MIT License
+├── downloader.py              # Core script — download, update, reconcile
+├── generate.py                # Feature engineering → daily_features.parquet
+├── screener.py                # Stock screener → screener_results.csv
+├── config.example.py          # Downloader config template (copy to config.py)
+├── screen_config.example.py   # Screener config template (copy to screen_config.py)
+├── config.py                  # Your downloader settings (gitignored)
+├── screen_config.py           # Your screener settings (gitignored)
+├── install.bat                # One-click dependency install (Windows)
+├── daily.bat                  # One-click daily update (Windows)
+├── generate.bat               # One-click feature generation (Windows)
+├── screen.bat                 # One-click stock screener (Windows)
+├── nasdaq_screener.csv        # NASDAQ stock listing (you download this)
+├── requirements.txt           # Python dependencies
+├── EXAMPLES.md                # Additional usage examples
+├── LICENSE                    # MIT License
 └── README.md
 ```
 
