@@ -16,7 +16,7 @@
 
 It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), transforms the raw prices into **60+ ML-ready technical features**, and then **scores every stock** across momentum, trend, volume, and volatility factors — giving you ranked trade candidates with entry/stop/target prices. No terminal required.
 
-Four batch files do all the work:
+Five batch files do all the work:
 
 | Double-click this | What it does |
 |-------------------|-------------|
@@ -24,10 +24,11 @@ Four batch files do all the work:
 | **`daily.bat`** | Downloads / updates all stock price data |
 | **`generate.bat`** | Builds 60+ technical features for ML from your data |
 | **`screen.bat`** | Scores all stocks and outputs today's top trade candidates |
+| **`trade.bat`** | Executes trades on Alpaca (paper or live) from screener results |
 
 ```
-daily.bat  →  generate.bat  →  screen.bat
-(download)    (features)       (trade picks)
+daily.bat  →  generate.bat  →  screen.bat  →  trade.bat
+(download)    (features)       (trade picks)   (execute)
 ```
 
 ---
@@ -57,6 +58,8 @@ git clone https://github.com/natedoggzCD/YfinanceDownloader.git
 **5. Generate ML features** — **double-click `generate.bat`** to produce `daily_features.parquet` with 60+ technical indicators.
 
 **6. Screen for trade candidates** — **double-click `screen.bat`** to score every stock and get ranked picks with entry/stop/target prices saved to `screener_results.csv`.
+
+**7. Execute trades (optional)** — **double-click `trade.bat`** to paper-trade your top picks on Alpaca. See [Alpaca Setup](#-alpaca-paper-trading-free) below for the free 2-minute signup.
 
 ---
 
@@ -99,6 +102,16 @@ docker compose run --rm yfinance python screener.py
 docker compose run --rm yfinance python screener.py --ai
 ```
 
+**7. Execute trades (optional):**
+```bash
+# Preview trades (no orders placed)
+docker compose run --rm yfinance python trader.py --dry-run
+# Execute paper trades
+docker compose run --rm yfinance python trader.py
+# Check positions
+docker compose run --rm yfinance python trader.py --status
+```
+
 > **💾 Your data is persistent.** The `docker-compose.yml` bind-mounts your project folder (`volumes: - .:/app`), so all downloaded CSVs and generated Parquet files are written directly to your machine — not inside the container. You can stop, rebuild, or remove the container at any time without losing data. Your files will always be in the `YfinanceDownloader/` folder:
 >
 > | File | Location on your machine |
@@ -134,6 +147,15 @@ Runs the feature engineering pipeline. Reads `prices_daily.csv` and produces `da
 ### `screen.bat`
 
 Scores every stock in `daily_features.parquet` across momentum, trend, volume, pullback, and volatility factors. Outputs ranked trade candidates with entry/stop/target prices to `screener_results.csv`. Optionally asks if you want AI-powered trade summaries (requires an API key in `screen_config.py`).
+
+### `trade.bat`
+
+Reads `screener_results.csv` and executes trades on your Alpaca account. Offers three modes:
+1. **Preview** (dry run) — shows exactly what would be traded, no orders placed
+2. **Execute** — places paper (or live) orders with R-Unit position sizing
+3. **Status** — shows your current positions and P&L
+
+Requires Alpaca API keys in `trade_config.py`. See [setup guide](#-alpaca-paper-trading-free) below.
 
 ---
 
@@ -188,6 +210,114 @@ python screener.py --ai                # Enable AI summaries
 python screener.py --output picks.csv  # Custom output file
 ```
 
+---
+
+## 💰 Alpaca Paper Trading (Free)
+
+**New to trading APIs?** Alpaca gives you a free paper trading account with $100,000 in simulated cash. No credit card, no real money, no risk. Setup takes 2 minutes.
+
+### Step 1: Create a Free Alpaca Account
+
+1. Go to **[https://app.alpaca.markets/signup](https://app.alpaca.markets/signup)**
+2. Sign up with your email and a password
+3. Verify your email (check your inbox)
+4. You now have a paper trading account with **$100,000 fake money**
+
+### Step 2: Get Your API Keys
+
+1. Log in to [https://app.alpaca.markets](https://app.alpaca.markets)
+2. In the left sidebar, click **"Paper Trading"**
+3. Click **"View"** next to **API Keys**
+4. Click **"Generate New Key"**
+5. **Copy both keys** — you'll need the API Key ID and the Secret Key
+
+> **Important:** The Secret Key is only shown once. Copy it immediately.
+
+### Step 3: Configure YfinanceDownloader
+
+1. Copy `trade_config.example.py` to `trade_config.py`
+2. Paste your keys:
+
+```python
+ALPACA_API_KEY = "PKXXXXXXXXXXXXXXXX"        # Your API Key ID
+ALPACA_SECRET_KEY = "xxxxxxxxxxxxxxxxxxxxxxx"  # Your Secret Key
+PAPER_TRADING = True                            # Start with paper trading!
+```
+
+3. **Double-click `trade.bat`** — that's it.
+
+### How It Works
+
+The trader reads your `screener_results.csv` and:
+
+1. **Connects** to your Alpaca paper account
+2. **Sizes positions** using R-Unit risk management (same logic as [AutoTrade](https://github.com/natedoggzCD)) — risking 1% of equity per trade
+3. **Shows you the plan** — every order with entry, stop, target, and cost
+4. **Asks for confirmation** before placing any orders
+5. **Logs every trade** to `trade_log.csv` for review
+
+### Position Sizing (R-Unit)
+
+Every trade is sized so that hitting your stop loss costs exactly 1% of your account:
+
+```
+Risk per trade = Account Equity × 1%
+Shares = Risk per trade ÷ (Entry Price - Stop Price)
+```
+
+Example: $100,000 account, buying a $50 stock with a $47 stop:
+- Risk = $100,000 × 1% = $1,000
+- Risk per share = $50 - $47 = $3
+- Shares = $1,000 ÷ $3 = **333 shares** ($16,650 position)
+
+### Trader Commands
+
+```bash
+python trader.py                     # Trade top picks (asks for confirmation)
+python trader.py --dry-run           # Preview orders without placing them
+python trader.py --status            # Show account balance and positions
+python trader.py --top 5             # Only trade top 5 picks
+python trader.py --min-score 70      # Only trade stocks scored 70+
+python trader.py --input my_picks.csv  # Use custom screener output
+```
+
+### Trader Configuration
+
+All settings in `trade_config.py`:
+
+```python
+# Position sizing
+RISK_PER_TRADE_PCT = 1.0     # 1% risk per trade (conservative)
+MAX_POSITION_PCT = 5.0        # Max 5% of equity per position
+MAX_POSITIONS = 10            # Max 10 open positions at once
+
+# Safety
+MIN_CASH_RESERVE_PCT = 20.0   # Always keep 20% in cash
+MIN_SCORE_TO_TRADE = 60.0     # Only trade stocks scored 60+
+CONFIRM_BEFORE_TRADING = True # Ask before placing orders
+
+# Mode
+PAPER_TRADING = True          # True = paper, False = live
+```
+
+### Going Live
+
+When you're confident with paper trading results:
+
+1. Fund your Alpaca account at [https://app.alpaca.markets](https://app.alpaca.markets)
+2. Switch to **Live Trading** in the sidebar → generate **Live API Keys**
+3. Update `trade_config.py`:
+
+```python
+ALPACA_API_KEY = "your-live-key"
+ALPACA_SECRET_KEY = "your-live-secret"
+PAPER_TRADING = False    # ← This switches to real money
+```
+
+> **⚠️ Start with paper trading.** Run it for at least a few weeks to understand how the system behaves before risking real capital.
+
+---
+
 ### Screener Configuration
 
 Copy `screen_config.example.py` to `screen_config.py` and edit thresholds:
@@ -240,6 +370,10 @@ python downloader.py --all
 | `python generate.py` | Generate technical features → `daily_features.parquet` |
 | **`daily.bat`** | **One-click wrapper** — runs `--all` and prompts to update screener (Windows) |
 | **`generate.bat`** | **One-click wrapper** — runs `generate.py` (Windows) |
+| `python trader.py` | Execute trades on Alpaca from screener results |
+| `python trader.py --dry-run` | Preview trades without placing orders |
+| `python trader.py --status` | Show Alpaca account balance and positions |
+| **`trade.bat`** | **One-click wrapper** — runs `trader.py` with menu (Windows) |
 
 ### Examples
 
@@ -380,12 +514,16 @@ YfinanceDownloader/
 ├── screener.py                # Stock screener → screener_results.csv
 ├── config.example.py          # Downloader config template (copy to config.py)
 ├── screen_config.example.py   # Screener config template (copy to screen_config.py)
+├── trade_config.example.py    # Trader config template (copy to trade_config.py)
 ├── config.py                  # Your downloader settings (gitignored)
 ├── screen_config.py           # Your screener settings (gitignored)
+├── trade_config.py            # Your Alpaca API keys (gitignored)
 ├── install.bat                # One-click dependency install (Windows)
 ├── daily.bat                  # One-click daily update (Windows)
 ├── generate.bat               # One-click feature generation (Windows)
 ├── screen.bat                 # One-click stock screener (Windows)
+├── trade.bat                  # One-click Alpaca trader (Windows)
+├── trader.py                  # Trade execution → trade_log.csv
 ├── nasdaq_screener.csv        # NASDAQ stock listing (you download this)
 ├── requirements.txt           # Python dependencies
 ├── EXAMPLES.md                # Additional usage examples
@@ -464,6 +602,9 @@ The downloader is built for unattended daily use with several safeguards:
 | No data returned for a ticker | Stock may be delisted or have no history — it gets skipped automatically |
 | Rate limit / connection errors | Increase `PAUSE_DURATION_SECONDS` in `config.py` |
 | Column mismatch after yfinance update | Check `format_daily_data()` / `format_hourly_data()` column mappings |
+| `ALPACA API KEYS NOT SET` | Sign up at [app.alpaca.markets/signup](https://app.alpaca.markets/signup), get keys, paste into `trade_config.py` |
+| `Could not connect to Alpaca` | Double-check your API Key and Secret Key in `trade_config.py`. Make sure you're using Paper keys with `PAPER_TRADING = True` |
+| `alpaca-py is not installed` | Run `pip install alpaca-py` or double-click `install.bat` |
 
 ---
 
