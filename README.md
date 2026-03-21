@@ -12,9 +12,11 @@
 
 ---
 
-**Accurate data is the foundation of every trading strategy, ML model, and backtest.** If your prices are stale, your listings are outdated, or your features are miscalculated, nothing built on top of that data can be trusted. YfinanceDownloader solves this by giving you a single source of truth — clean, current, and complete NASDAQ price data that stays in sync automatically.
+**Want to analyze stocks but don't know where to start?**
 
-It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), transforms the raw prices into **60+ ML-ready technical features**, and then **scores every stock** across momentum, trend, volume, and volatility factors — giving you ranked trade candidates with entry/stop/target prices. No terminal required.
+This tool downloads price data (open, high, low, close, volume) for every NASDAQ-listed stock, computes technical indicators like RSI and MACD, then tells you which stocks look strongest today — with exact entry prices, stop losses, and profit targets.
+
+No coding experience needed. Double-click a batch file and you're running.
 
 Five batch files do all the work:
 
