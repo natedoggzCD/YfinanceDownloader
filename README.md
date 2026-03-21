@@ -24,36 +24,67 @@ Three batch files do all the work:
 
 ---
 
-## ⚡ Quick Start (Windows — No Terminal Needed)
+## ⚡ Quick Start
+
+Pick whichever setup method you prefer — **batch files** (no terminal needed) or **Docker** (no Python install needed):
+
+### Option A: Batch Files (Windows — Easiest)
 
 > **Prerequisite:** Install Python 3.8+ from [python.org](https://www.python.org/downloads/) (check "Add to PATH" during install).
 
-### 1. Download the project
-
-Download and unzip this repo, or clone it:
+**1. Download the project** — unzip or clone:
 ```
 git clone https://github.com/natedoggzCD/YfinanceDownloader.git
 ```
 
-### 2. Set up (one time)
-
+**2. Set up (one time)**
 1. **Double-click `install.bat`** — installs all Python packages automatically.
 2. Copy `config.example.py` to `config.py` — edit it to set your price range if you want (defaults work fine).
 3. Download the NASDAQ screener CSV from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener) and save it as `nasdaq_screener.csv` in the project folder.
 
-### 3. Get your data
+**3. Get your data** — **double-click `daily.bat`**. It asks if you want to refresh the screener, then downloads everything. Two CSV files appear: `prices_daily.csv` and `prices_hourly.csv`.
 
-**Double-click `daily.bat`** — it will ask if you want to update the screener first, then downloads everything.
+**4. Keep it updated** — **double-click `daily.bat` anytime**. It only downloads new data, so repeat runs are fast.
 
-That's it. Two CSV files appear: `prices_daily.csv` and `prices_hourly.csv`.
+**5. Generate ML features (optional)** — **double-click `generate.bat`** to produce `daily_features.parquet` with 60+ technical indicators.
 
-### 4. Keep it updated
+---
 
-**Double-click `daily.bat` anytime** to pull the latest prices. It only downloads new data, so repeat runs are fast.
+### Option B: Docker (Any OS — No Python Install)
 
-### 5. Generate ML features (optional)
+> **Prerequisite:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows, Mac, or Linux).
 
-**Double-click `generate.bat`** to produce `daily_features.parquet` with 60+ technical indicators ready for analysis or machine learning.
+**1. Download the project:**
+```bash
+git clone https://github.com/natedoggzCD/YfinanceDownloader.git
+cd YfinanceDownloader
+```
+
+**2. Set up (one time):**
+```bash
+cp config.example.py config.py    # Edit price range if desired
+```
+Place your `nasdaq_screener.csv` in the project folder (download from [nasdaq.com/market-activity/stocks/screener](https://www.nasdaq.com/market-activity/stocks/screener)).
+
+**3. Get your data:**
+```bash
+docker compose up --build
+```
+
+**4. Keep it updated:**
+```bash
+# Update screener + download latest data
+docker compose run --rm yfinance python downloader.py --update-screener --all
+```
+
+**5. Generate ML features (optional):**
+```bash
+docker compose run --rm yfinance python generate.py
+```
+
+The `docker-compose.yml` mounts your project folder into the container — all output files (CSVs, parquet) appear on your machine automatically.
+
+---
 
 > **First run note:** The initial download covers 1,000+ stocks and takes several hours due to Yahoo Finance rate limits. Every run after that is fast.
 
@@ -91,28 +122,7 @@ python downloader.py --all
 
 ---
 
-## 🐳 Running with Docker
-
-If you don't want to install Python at all, use Docker:
-
-```bash
-cp config.example.py config.py
-
-# Build and run (daily update)
-docker compose up --build
-
-# Update screener + download data
-docker compose run --rm yfinance python downloader.py --update-screener --all
-
-# Generate features
-docker compose run --rm yfinance python generate.py
-```
-
-The `docker-compose.yml` mounts your current directory into the container, so output files sync to your machine automatically.
-
----
-
-## 🛠️ All Commands
+## ️ All Commands
 
 | Command | What it does |
 |---------|-------------|
