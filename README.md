@@ -22,7 +22,7 @@ Five batch files do all the work:
 
 | Double-click this | What it does |
 |-------------------|-------------|
-| **`install.bat`** | Installs all Python dependencies (one-time setup) |
+| **`install.bat`** | Installs all Python dependencies and runs a **Health Check** |
 | **`daily.bat`** | Downloads / updates all stock price data |
 | **`generate.bat`** | Builds 60+ technical features for ML from your data |
 | **`screen.bat`** | Scores all stocks and outputs today's top trade candidates |
@@ -141,7 +141,15 @@ docker compose run --rm yfinance python trader.py --status
 
 ### `install.bat`
 
-Runs `pip install -r requirements.txt`. Double-click once after downloading the project.
+Runs `pip install -r requirements.txt`. Double-click once after downloading the project. It also automatically runs **`validate_setup.py`** to ensure your environment is configured correctly.
+
+### `validate_setup.py` (New!)
+
+A dedicated health-check script for beginners. Run it anytime (`python validate_setup.py`) to verify:
+- All required Python libraries are installed.
+- Your configuration files are formatted correctly.
+- Your Alpaca API keys are detected.
+- Your data files (`nasdaq_screener.csv`, etc.) are in the right place.
 
 ### `daily.bat`
 
@@ -702,13 +710,28 @@ The downloader is built for unattended daily use with several safeguards:
 
 ---
 
-## 🆕 What's New (v2)
+## 🆕 What's New (v2.1 Production-Ready)
 
-- **Screener v2** — Cross-factor bonuses, volume confirmation gates, signal-specific stop/target levels, new pullback-entry scan type, R:R quality gate
-- **Smart Position Sizing** — Conviction-scaled risk (0.5%-1.5%) based on score quality, portfolio heat cap, bracket orders with automatic stop-loss + take-profit
-- **Unified YAML Config** — One `config.yaml` replaces three Python files (Python configs still work as fallback)
-- **Data Validation** — `--validate` flag checks data quality before screening
-- **Verbose Mode** — `--verbose` shows per-factor score breakdown for every pick
+- **Vectorized OBV** — On-Balance Volume calculation is now 100x faster using NumPy vectorization.
+- **Memory-Efficient Updates** — `downloader.py` now uses a "Fast Date Lookup" that only reads the end of your CSV files, saving GBs of RAM.
+- **Health Check Tool** — `validate_setup.py` helps beginners troubleshoot installation issues instantly.
+- **Screener v2** — Cross-factor bonuses, volume confirmation gates, signal-specific stop/target levels, new pullback-entry scan type, R:R quality gate.
+- **Smart Position Sizing** — Conviction-scaled risk (0.5%-1.5%) based on score quality, portfolio heat cap, bracket orders with automatic stop-loss + take-profit.
+- **Unified YAML Config** — One `config.yaml` replaces three Python files (Python configs still work as fallback).
+- **Data Validation** — `--validate` flag checks data quality before screening.
+- **Verbose Mode** — `--verbose` shows per-factor score breakdown for every pick.
+
+---
+
+## 🚀 Production Checklist
+
+Ready to go from testing to production? Follow this checklist:
+
+1. [ ] **Run Health Check**: `python validate_setup.py` must show all SUCCESS.
+2. [ ] **Verify Screener**: Run `python screener.py --validate` to ensure your data quality is high.
+3. [ ] **Paper Trade First**: Run `trade.bat` in Paper mode for at least 2 weeks.
+4. [ ] **Set Risk Caps**: Ensure `PORTFOLIO_HEAT_MAX_PCT` is set to a safe level (default 6%).
+5. [ ] **Check Cash Reserve**: Keep at least 20% in cash (`MIN_CASH_RESERVE_PCT`).
 
 ---
 

@@ -124,16 +124,19 @@ def atr(high, low, close, window=14):
 
 
 def obv(close, volume):
-    """On-Balance Volume."""
-    obv_values = [0]
-    for current, previous, vol in zip(close[1:], close[:-1], volume[1:]):
-        if current > previous:
-            obv_values.append(obv_values[-1] + vol)
-        elif current < previous:
-            obv_values.append(obv_values[-1] - vol)
-        else:
-            obv_values.append(obv_values[-1])
-    return pd.Series(obv_values, index=close.index)
+    """On-Balance Volume (vectorized)."""
+    # Calculate price change
+    diff = close.diff()
+    
+    # Generate directions: 1 for up, -1 for down, 0 for unchanged
+    # np.sign(0) is 0, which correctly handles unchanged prices
+    direction = np.sign(diff.fillna(0))
+    
+    # Calculate daily OBV contribution
+    obv_daily = direction * volume
+    
+    # Cumulative sum to get the OBV series
+    return obv_daily.cumsum()
 
 
 def roc(series, window=12):

@@ -13,5 +13,9 @@ playwright install chromium
 echo.
 echo ============================================================
 echo Installation Complete!
+echo.
+echo Running setup validation...
+python validate_setup.py
+echo.
 echo ============================================================
 pause

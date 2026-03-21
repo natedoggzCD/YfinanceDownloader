@@ -576,21 +576,68 @@ def initial_download(tickers: List[str], dry_run: bool = False):
 def load_latest_per_ticker(
     csv_path: Path, time_col: str, chunk_size: int = 100000
 ) -> Dict[str, datetime]:
-    """Load the latest timestamp for each ticker from CSV."""
+    """Load the latest timestamp for each ticker from CSV.
+    
+    Memory-efficient optimization: Only reads the last N rows of the file
+    to find the most recent dates, rather than the entire history.
+    """
     latest_by_ticker: Dict[str, datetime] = {}
 
+    if not csv_path.exists():
+        return latest_by_ticker
+
     try:
-        for chunk in pd.read_csv(
-            csv_path, usecols=["ticker", time_col], chunksize=chunk_size
-        ):
-            chunk[time_col] = pd.to_datetime(chunk[time_col])
-            for ticker, group in chunk.groupby("ticker"):
-                ticker = str(ticker).strip().upper()
-                max_ts = group[time_col].max()
-                if ticker not in latest_by_ticker or max_ts > latest_by_ticker[ticker]:
-                    latest_by_ticker[ticker] = max_ts
-    except FileNotFoundError:
-        pass
+        # Optimization: Read only the last ~10k rows to find the latest date
+        # This assumes the CSV is roughly sorted by date, which it should be
+        # as it's an append-only log.
+        file_size = os.path.getsize(csv_path)
+        
+        # If file is small (< 1MB), just read the whole thing
+        if file_size < 1024 * 1024:
+            df = pd.read_csv(csv_path, usecols=["ticker", time_col])
+        else:
+            # For large files, estimate how many bytes ~10k rows take
+            # Average row is ~100 bytes, so 1MB should be plenty
+            with open(csv_path, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                # Seek back 1MB or to start
+                f.seek(max(0, file_size - 1024 * 1024))
+                lines = f.readlines()
+                # Skip the first partial line if we seeked back
+                if file_size > 1024 * 1024:
+                    lines = lines[1:]
+                
+                # Convert back to string and parse
+                import io
+                header = pd.read_csv(csv_path, nrows=0).columns.tolist()
+                content = b"".join(lines).decode('utf-8', errors='ignore')
+                df = pd.read_csv(io.StringIO(content), names=header)
+                # Ensure we only have the columns we need
+                df = df[["ticker", time_col]]
+
+        df[time_col] = pd.to_datetime(df[time_col])
+        # Get the latest date for each ticker in this chunk
+        for ticker, group in df.groupby("ticker"):
+            ticker = str(ticker).strip().upper()
+            max_ts = group[time_col].max()
+            latest_by_ticker[ticker] = max_ts
+            
+    except Exception as e:
+        # Fallback to standard chunked reading if optimization fails
+        print(f"  Warning: Fast date lookup failed ({e}), falling back to full scan...")
+        latest_by_ticker = {}
+        try:
+            for chunk in pd.read_csv(
+                csv_path, usecols=["ticker", time_col], chunksize=chunk_size
+            ):
+                chunk[time_col] = pd.to_datetime(chunk[time_col])
+                for ticker, group in chunk.groupby("ticker"):
+                    ticker = str(ticker).strip().upper()
+                    max_ts = group[time_col].max()
+                    if ticker not in latest_by_ticker or max_ts > latest_by_ticker[ticker]:
+                        latest_by_ticker[ticker] = max_ts
+        except Exception:
+            pass
 
     return latest_by_ticker
 
