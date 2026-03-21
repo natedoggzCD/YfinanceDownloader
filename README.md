@@ -12,16 +12,6 @@
 
 ---
 
-### What's New (v2)
-
-- **Screener v2** — Cross-factor bonuses, volume confirmation gates, signal-specific stop/target levels, new pullback-entry scan type, R:R quality gate
-- **Smart Position Sizing** — Conviction-scaled risk (0.5%-1.5%) based on score quality, portfolio heat cap, bracket orders with automatic stop-loss + take-profit
-- **Unified YAML Config** — One `config.yaml` replaces three Python files (Python configs still work as fallback)
-- **Data Validation** — `--validate` flag checks data quality before screening
-- **Verbose Mode** — `--verbose` shows per-factor score breakdown for every pick
-
----
-
 **Accurate data is the foundation of every trading strategy, ML model, and backtest.** If your prices are stale, your listings are outdated, or your features are miscalculated, nothing built on top of that data can be trusted. YfinanceDownloader solves this by giving you a single source of truth — clean, current, and complete NASDAQ price data that stays in sync automatically.
 
 It downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), transforms the raw prices into **60+ ML-ready technical features**, and then **scores every stock** across momentum, trend, volume, and volatility factors — giving you ranked trade candidates with entry/stop/target prices. No terminal required.
@@ -707,6 +697,16 @@ The downloader is built for unattended daily use with several safeguards:
 | `ALPACA API KEYS NOT SET` | Sign up at [app.alpaca.markets/signup](https://app.alpaca.markets/signup), get keys, paste into `trade_config.py` |
 | `Could not connect to Alpaca` | Double-check your API Key and Secret Key in `trade_config.py`. Make sure you're using Paper keys with `PAPER_TRADING = True` |
 | `alpaca-py is not installed` | Run `pip install alpaca-py` or double-click `install.bat` |
+
+---
+
+## 🆕 What's New (v2)
+
+- **Screener v2** — Cross-factor bonuses, volume confirmation gates, signal-specific stop/target levels, new pullback-entry scan type, R:R quality gate
+- **Smart Position Sizing** — Conviction-scaled risk (0.5%-1.5%) based on score quality, portfolio heat cap, bracket orders with automatic stop-loss + take-profit
+- **Unified YAML Config** — One `config.yaml` replaces three Python files (Python configs still work as fallback)
+- **Data Validation** — `--validate` flag checks data quality before screening
+- **Verbose Mode** — `--verbose` shows per-factor score breakdown for every pick
 
 ---
 
