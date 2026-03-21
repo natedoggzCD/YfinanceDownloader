@@ -12,7 +12,7 @@
 
 ---
 
-Downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock and saves it to local CSV files. New IPOs get added, delisted stocks get removed, and your data stays current — all without opening a terminal.
+Downloads historical **Open, High, Low, Close, Volume** (OHLCV) data from Yahoo Finance for every NASDAQ-listed stock, keeps it automatically synced with current listings (new IPOs added, delisted stocks removed), and transforms the raw prices into **60+ ML-ready technical features** — moving averages, momentum indicators, volatility metrics, lag features, and rolling statistics — all saved to a compact Parquet file. No terminal required.
 
 Three batch files do all the work:
 
