@@ -49,20 +49,20 @@ def check_dependencies():
 def check_config():
     print_step("Checking configuration...")
     
-    # Check for config.yaml or config.py
+    # Check for config.yaml or legacy config.py
     has_yaml = os.path.exists("config/config.yaml")
     has_py = os.path.exists("config/config.py")
     
     if not has_yaml and not has_py:
-        print_err("No config.yaml or config.py found.")
-        print("    Action: Copy config.example.yaml to config.yaml")
+        print_err("No config/config.yaml or legacy config/config.py found.")
+        print("    Action: Copy config/config.example.yaml to config/config.yaml or run run_gui.bat")
         return None
     
     if has_yaml:
-        print_ok("config.yaml found (preferred)")
+        print_ok("config/config.yaml found")
         # Simple validation could go here
     elif has_py:
-        print_ok("config.py found (legacy)")
+        print_ok("config/config.py found (legacy fallback)")
     
     return "yaml" if has_yaml else "py"
 

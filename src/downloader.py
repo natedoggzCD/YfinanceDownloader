@@ -15,10 +15,16 @@ Usage:
     daily.bat                            # One-click: runs --all (Windows)
 """
 
-import argparse`nimport sys`nimport os`nconfig_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`nif config_dir not in sys.path:`n    sys.path.append(config_dir)
+import argparse
+import sys
+import os
+
+config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+if config_dir not in sys.path:
+    sys.path.append(config_dir)
+
 import logging
 import re
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -577,9 +583,10 @@ def load_latest_per_ticker(
     csv_path: Path, time_col: str, chunk_size: int = 100000
 ) -> Dict[str, datetime]:
     """Load the latest timestamp for each ticker from CSV.
-    
-    Memory-efficient optimization: Only reads the last N rows of the file
-    to find the most recent dates, rather than the entire history.
+
+    Reads the full file in chunks so every ticker is considered. A tail-only
+    shortcut is not correct for append-only CSVs that can end with a subset of
+    tickers after reconcile/init runs.
     """
     latest_by_ticker: Dict[str, datetime] = {}
 
@@ -587,57 +594,19 @@ def load_latest_per_ticker(
         return latest_by_ticker
 
     try:
-        # Optimization: Read only the last ~10k rows to find the latest date
-        # This assumes the CSV is roughly sorted by date, which it should be
-        # as it's an append-only log.
-        file_size = os.path.getsize(csv_path)
-        
-        # If file is small (< 1MB), just read the whole thing
-        if file_size < 1024 * 1024:
-            df = pd.read_csv(csv_path, usecols=["ticker", time_col])
-        else:
-            # For large files, estimate how many bytes ~10k rows take
-            # Average row is ~100 bytes, so 1MB should be plenty
-            with open(csv_path, 'rb') as f:
-                f.seek(0, os.SEEK_END)
-                # Seek back 1MB or to start
-                f.seek(max(0, file_size - 1024 * 1024))
-                lines = f.readlines()
-                # Skip the first partial line if we seeked back
-                if file_size > 1024 * 1024:
-                    lines = lines[1:]
-                
-                # Convert back to string and parse
-                import io
-                header = pd.read_csv(csv_path, nrows=0).columns.tolist()
-                content = b"".join(lines).decode('utf-8', errors='ignore')
-                df = pd.read_csv(io.StringIO(content), names=header)
-                # Ensure we only have the columns we need
-                df = df[["ticker", time_col]]
-
-        df[time_col] = pd.to_datetime(df[time_col])
-        # Get the latest date for each ticker in this chunk
-        for ticker, group in df.groupby("ticker"):
-            ticker = str(ticker).strip().upper()
-            max_ts = group[time_col].max()
-            latest_by_ticker[ticker] = max_ts
-            
+        for chunk in pd.read_csv(
+            csv_path, usecols=["ticker", time_col], chunksize=chunk_size
+        ):
+            chunk[time_col] = pd.to_datetime(chunk[time_col], errors="coerce")
+            chunk = chunk.dropna(subset=["ticker", time_col])
+            for ticker, group in chunk.groupby("ticker"):
+                ticker = str(ticker).strip().upper()
+                max_ts = group[time_col].max()
+                if ticker not in latest_by_ticker or max_ts > latest_by_ticker[ticker]:
+                    latest_by_ticker[ticker] = max_ts
     except Exception as e:
-        # Fallback to standard chunked reading if optimization fails
-        print(f"  Warning: Fast date lookup failed ({e}), falling back to full scan...")
-        latest_by_ticker = {}
-        try:
-            for chunk in pd.read_csv(
-                csv_path, usecols=["ticker", time_col], chunksize=chunk_size
-            ):
-                chunk[time_col] = pd.to_datetime(chunk[time_col])
-                for ticker, group in chunk.groupby("ticker"):
-                    ticker = str(ticker).strip().upper()
-                    max_ts = group[time_col].max()
-                    if ticker not in latest_by_ticker or max_ts > latest_by_ticker[ticker]:
-                        latest_by_ticker[ticker] = max_ts
-        except Exception:
-            pass
+        print(f"  Warning: Could not load latest dates from {csv_path} ({e})")
+        return {}
 
     return latest_by_ticker
 
@@ -670,12 +639,8 @@ def update_data(
     else:
         tickers_to_update = list(latest_by_ticker.keys())
 
-    # Auto-skip tickers with stale data (no update in > STALE_TICKER_DAYS days)
-    now = datetime.now()
-    stale_cutoff = now - timedelta(days=STALE_TICKER_DAYS)
     stale_tickers = []
     already_current = []
-    active_tickers = []
     last_trade_date = last_trade.date()
 
     for t in tickers_to_update:
@@ -690,17 +655,18 @@ def update_data(
                 already_current.append(t)
                 continue
 
-            # Skip if stale (no data in > STALE_TICKER_DAYS)
-            if last_seen_naive < stale_cutoff:
+            # Stale tickers need backfill, not permanent exclusion.
+            stale_age_days = (last_trade_date - last_seen_date).days
+            if stale_age_days > STALE_TICKER_DAYS:
                 stale_tickers.append(t)
-                continue
-        active_tickers.append(t)
-    tickers_to_update = active_tickers
 
     if already_current:
         print(f"  Already current: {len(already_current)} tickers (data through {last_trade_date})")
     if stale_tickers:
-        print(f"  Auto-skipped {len(stale_tickers)} stale tickers (no data in >{STALE_TICKER_DAYS} days)")
+        print(
+            f"  Backfilling {len(stale_tickers)} stale tickers "
+            f"(latest data older than {STALE_TICKER_DAYS} days)"
+        )
 
     print(f"  Tickers to update: {len(tickers_to_update)}")
 
@@ -720,6 +686,7 @@ def update_data(
 
     request_count = 0
     total_added = 0
+    hourly_backfill_capped = False
 
     for batch_idx, batch in enumerate(_chunked(tickers_to_update, BATCH_SIZE), 1):
         print(f"  Batch {batch_idx}: Processing {len(batch)} tickers...")
@@ -730,6 +697,16 @@ def update_data(
                 continue
 
             start = last_seen + cfg.step
+            if cfg.interval_value == "hourly":
+                hourly_floor = end_time - timedelta(days=HOURLY_MAX_DAYS)
+                if start < hourly_floor:
+                    start = hourly_floor
+                    if not hourly_backfill_capped:
+                        print(
+                            f"  Hourly backfill capped to the last ~{HOURLY_MAX_DAYS} days "
+                            f"for very stale tickers."
+                        )
+                        hourly_backfill_capped = True
             if start >= end_time:
                 continue
 
@@ -769,7 +746,7 @@ def update_data(
 
     print(f"  Added {total_added} new rows")
     if stale_tickers:
-        print(f"  Stale tickers skipped: {', '.join(stale_tickers[:20])}")
+        print(f"  Stale tickers backfilled: {', '.join(stale_tickers[:20])}")
         if len(stale_tickers) > 20:
             print(f"    ... and {len(stale_tickers) - 20} more")
 
@@ -878,7 +855,7 @@ Examples:
         "--all", action="store_true", help="Run reconcile, update, and init if needed"
     )
     parser.add_argument(
-        "--update-screener", action="store_true", help="Update NASDAQ screener CSV using Playwright first"
+        "--update-screener", action="store_true", help="Update NASDAQ screener CSV before running data steps"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Preview changes without downloading"

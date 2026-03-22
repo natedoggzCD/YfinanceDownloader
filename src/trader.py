@@ -13,8 +13,7 @@ Usage:
 
 Requires:
     pip install alpaca-py
-    Copy trade_config.example.py -> trade_config.py and add your API keys,
-    or use config.yaml (preferred).
+    Set your keys in config/config.yaml (the GUI writes this file).
 """
 
 import argparse
@@ -27,19 +26,8 @@ import pandas as pd
 
 # ── Load Config ──────────────────────────────────────────────────
 
-def _load_yaml_config(yaml_path: str) -> dict:
-    """Load config.yaml and flatten trading section into flat keys."""
-    try:
-        import yaml
-    except ImportError:
-        return {}
-
-    if not os.path.exists(yaml_path):
-        return {}
-
-    with open(yaml_path, "r") as f:
-        raw = yaml.safe_load(f) or {}
-
+def _flatten_config(raw: dict) -> dict:
+    """Flatten nested YAML config into the format this module expects."""
     cfg = {}
     trading = raw.get("trading", {})
     for key, val in trading.items():
@@ -55,25 +43,39 @@ def _load_yaml_config(yaml_path: str) -> dict:
     return cfg
 
 
-def load_config() -> dict:`n    import sys`n    import os`n    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`n    if config_dir not in sys.path:`n        sys.path.append(config_dir)`n
-    """Load config.yaml first, fall back to trade_config.py / trade_config.example.py."""
-    # Try YAML first
-    yaml_cfg = _load_yaml_config("config/config.yaml")
-    if yaml_cfg:
-        return yaml_cfg
+def _load_yaml_config(yaml_path: str) -> dict:
+    """Load a YAML config file as a nested dictionary."""
+    try:
+        import yaml
+    except ImportError:
+        return {}
 
-    # Fall back to Python config
-    config = {}
-    config_file = "trade_config.py"
-    if not os.path.exists(config_file):
-        config_file = "trade_config.example.py"
-        if not os.path.exists(config_file):
-            print("ERROR: No config.yaml or trade_config.py found.")
-            print("Copy config.example.yaml to config.yaml, or trade_config.example.py to trade_config.py.")
-            sys.exit(1)
-    with open(config_file, "r") as f:
-        exec(f.read(), config)
-    return config
+    if not os.path.exists(yaml_path):
+        return {}
+
+    with open(yaml_path, "r") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _merge_dicts(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_config() -> dict:
+    """Load shared YAML config, overlaying local values onto example defaults."""
+    defaults = _load_yaml_config("config/config.example.yaml")
+    active = _load_yaml_config("config/config.yaml")
+    merged = _merge_dicts(defaults, active)
+    if not merged:
+        print("ERROR: config/config.example.yaml is missing or unreadable.")
+        sys.exit(1)
+    return _flatten_config(merged)
 
 
 def validate_keys(cfg: dict):
@@ -92,7 +94,7 @@ def validate_keys(cfg: dict):
         print("  3. Click 'Paper Trading' in the left sidebar")
         print("  4. Click 'View' next to API Keys -> 'Generate New Key'")
         print("  5. Copy your API Key and Secret Key")
-        print("  6. Paste them into trade_config.py or config.yaml:")
+        print("  6. Paste them into config/config.yaml:")
         print()
         print('     ALPACA_API_KEY = "PKXXXXXXXXXXXXXXXX"')
         print('     ALPACA_SECRET_KEY = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"')
@@ -128,7 +130,7 @@ def connect_alpaca(cfg: dict):
     except Exception as e:
         print(f"ERROR: Could not connect to Alpaca: {e}")
         print()
-        print("Check that your API keys in trade_config.py are correct.")
+        print("Check that your API keys in config/config.yaml are correct.")
         print("Dashboard: https://app.alpaca.markets/paper/dashboard/overview")
         sys.exit(1)
 

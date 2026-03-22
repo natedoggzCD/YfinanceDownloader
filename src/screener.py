@@ -30,116 +30,119 @@ import pandas as pd
 
 # ── Load Config ──────────────────────────────────────────────────
 
+def _flatten_config(raw: dict) -> dict:
+    """Flatten nested YAML config into the format this module expects."""
+    try:
+        cfg = {}
+
+        # Data section
+        data = raw.get("data", {})
+        for key, val in data.items():
+            cfg[key.upper()] = val
+
+        # Screener section
+        scr = raw.get("screener", {})
+        cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "data/daily_features.parquet")
+        cfg["OUTPUT_CSV"] = scr.get("output_csv", "data/screener_results.csv")
+        cfg["TOP_N"] = scr.get("top_n", 50)
+        cfg["MIN_PRICE"] = scr.get("min_price", 1.0)
+        cfg["MAX_PRICE"] = scr.get("max_price", 350.0)
+        cfg["MIN_AVG_VOLUME"] = scr.get("min_avg_volume", 500_000)
+        cfg["MIN_ATR_PCT"] = scr.get("min_atr_pct", 0.5)
+        cfg["MAX_ATR_PCT"] = scr.get("max_atr_pct", 8.0)
+
+        # Weights
+        weights = scr.get("weights", {})
+        cfg["WEIGHT_MOMENTUM"] = weights.get("momentum", 0.30)
+        cfg["WEIGHT_TREND"] = weights.get("trend", 0.15)
+        cfg["WEIGHT_VOLUME"] = weights.get("volume", 0.25)
+        cfg["WEIGHT_PULLBACK"] = weights.get("pullback", 0.10)
+        cfg["WEIGHT_VOLATILITY"] = weights.get("volatility", 0.20)
+
+        # Scan types
+        scan_types = scr.get("scan_types", {})
+        cfg["SCAN_MOMENTUM_BREAKOUT"] = scan_types.get("momentum_breakout", True)
+        cfg["SCAN_MEAN_REVERSION"] = scan_types.get("mean_reversion", True)
+        cfg["SCAN_BREAKOUT"] = scan_types.get("breakout", True)
+        cfg["SCAN_PULLBACK_ENTRY"] = scan_types.get("pullback_entry", True)
+
+        # ATR multiples
+        cfg["ATR_MULTIPLES"] = scr.get("atr_multiples", {})
+
+        # Quality gates
+        cfg["VOLUME_CONFIRMATION_GATE"] = scr.get("volume_confirmation_gate", 1.5)
+        cfg["MIN_RR_RATIO"] = scr.get("min_rr_ratio", 1.5)
+        cfg["MIN_SCORE"] = scr.get("min_score", 65)
+        cfg["SCORE_NORMALIZATION"] = scr.get("score_normalization", "absolute")
+
+        # Signal thresholds
+        mom = scr.get("momentum", {})
+        cfg["MOMENTUM_MIN_WEEKLY_RETURN"] = mom.get("min_weekly_return", 1.0)
+        cfg["MOMENTUM_RSI_MIN"] = mom.get("rsi_min", 30)
+        cfg["MOMENTUM_RSI_MAX"] = mom.get("rsi_max", 70)
+        cfg["MOMENTUM_MIN_VOLUME_RATIO"] = mom.get("min_volume_ratio", 1.5)
+
+        mr = scr.get("mean_reversion", {})
+        cfg["REVERSION_MAX_WEEKLY_RETURN"] = mr.get("max_weekly_return", -3.0)
+        cfg["REVERSION_RSI_MAX"] = mr.get("rsi_max", 35)
+        cfg["REVERSION_MIN_VOLUME_RATIO"] = mr.get("min_volume_ratio", 2.0)
+
+        bo = scr.get("breakout", {})
+        cfg["BREAKOUT_BB_WIDTH_MIN"] = bo.get("bb_width_min", 0.03)
+        cfg["BREAKOUT_MIN_VOLUME_RATIO"] = bo.get("min_volume_ratio", 1.5)
+
+        pe = scr.get("pullback_entry", {})
+        cfg["PULLBACK_SMA20_PROXIMITY_PCT"] = pe.get("sma20_proximity_pct", 2.0)
+        cfg["PULLBACK_RSI_MIN"] = pe.get("rsi_min", 35)
+        cfg["PULLBACK_RSI_MAX"] = pe.get("rsi_max", 60)
+
+        # AI
+        ai = scr.get("ai", {})
+        cfg["AI_API_KEY"] = ai.get("api_key", "")
+        cfg["AI_BASE_URL"] = ai.get("base_url", "https://api.openai.com/v1")
+        cfg["AI_MODEL"] = ai.get("model", "gpt-4o-mini")
+        cfg["AI_MAX_PICKS_TO_SUMMARIZE"] = ai.get("max_picks", 10)
+
+        # Trading section (for shared config)
+        trading = raw.get("trading", {})
+        for key, val in trading.items():
+            cfg[key.upper()] = val
+
+        return cfg
+    except Exception:
+        return {}
+
+
 def _load_yaml_config(yaml_path: str) -> dict:
-    """Load config.yaml and flatten into the flat-key format the rest of the code expects."""
+    if not os.path.exists(yaml_path):
+        return {}
     try:
         import yaml
     except ImportError:
         return {}
-
-    if not os.path.exists(yaml_path):
-        return {}
-
-    with open(yaml_path, "r") as f:
-        raw = yaml.safe_load(f) or {}
-
-    cfg = {}
-
-    # Data section
-    data = raw.get("data", {})
-    for key, val in data.items():
-        cfg[key.upper()] = val
-
-    # Screener section
-    scr = raw.get("screener", {})
-    cfg["FEATURES_PARQUET"] = scr.get("features_parquet", "data/daily_features.parquet")
-    cfg["OUTPUT_CSV"] = scr.get("output_csv", "data/screener_results.csv")
-    cfg["TOP_N"] = scr.get("top_n", 50)
-    cfg["MIN_PRICE"] = scr.get("min_price", 1.0)
-    cfg["MAX_PRICE"] = scr.get("max_price", 350.0)
-    cfg["MIN_AVG_VOLUME"] = scr.get("min_avg_volume", 500_000)
-    cfg["MIN_ATR_PCT"] = scr.get("min_atr_pct", 0.5)
-    cfg["MAX_ATR_PCT"] = scr.get("max_atr_pct", 8.0)
-
-    # Weights
-    weights = scr.get("weights", {})
-    cfg["WEIGHT_MOMENTUM"] = weights.get("momentum", 0.30)
-    cfg["WEIGHT_TREND"] = weights.get("trend", 0.15)
-    cfg["WEIGHT_VOLUME"] = weights.get("volume", 0.25)
-    cfg["WEIGHT_PULLBACK"] = weights.get("pullback", 0.10)
-    cfg["WEIGHT_VOLATILITY"] = weights.get("volatility", 0.20)
-
-    # Scan types
-    scan_types = scr.get("scan_types", {})
-    cfg["SCAN_MOMENTUM_BREAKOUT"] = scan_types.get("momentum_breakout", True)
-    cfg["SCAN_MEAN_REVERSION"] = scan_types.get("mean_reversion", True)
-    cfg["SCAN_BREAKOUT"] = scan_types.get("breakout", True)
-    cfg["SCAN_PULLBACK_ENTRY"] = scan_types.get("pullback_entry", True)
-
-    # ATR multiples
-    cfg["ATR_MULTIPLES"] = scr.get("atr_multiples", {})
-
-    # Quality gates
-    cfg["VOLUME_CONFIRMATION_GATE"] = scr.get("volume_confirmation_gate", 1.5)
-    cfg["MIN_RR_RATIO"] = scr.get("min_rr_ratio", 1.5)
-    cfg["MIN_SCORE"] = scr.get("min_score", 65)
-    cfg["SCORE_NORMALIZATION"] = scr.get("score_normalization", "absolute")
-
-    # Signal thresholds
-    mom = scr.get("momentum", {})
-    cfg["MOMENTUM_MIN_WEEKLY_RETURN"] = mom.get("min_weekly_return", 1.0)
-    cfg["MOMENTUM_RSI_MIN"] = mom.get("rsi_min", 30)
-    cfg["MOMENTUM_RSI_MAX"] = mom.get("rsi_max", 70)
-    cfg["MOMENTUM_MIN_VOLUME_RATIO"] = mom.get("min_volume_ratio", 1.5)
-
-    mr = scr.get("mean_reversion", {})
-    cfg["REVERSION_MAX_WEEKLY_RETURN"] = mr.get("max_weekly_return", -3.0)
-    cfg["REVERSION_RSI_MAX"] = mr.get("rsi_max", 35)
-    cfg["REVERSION_MIN_VOLUME_RATIO"] = mr.get("min_volume_ratio", 2.0)
-
-    bo = scr.get("breakout", {})
-    cfg["BREAKOUT_BB_WIDTH_MIN"] = bo.get("bb_width_min", 0.03)
-    cfg["BREAKOUT_MIN_VOLUME_RATIO"] = bo.get("min_volume_ratio", 1.5)
-
-    pe = scr.get("pullback_entry", {})
-    cfg["PULLBACK_SMA20_PROXIMITY_PCT"] = pe.get("sma20_proximity_pct", 2.0)
-    cfg["PULLBACK_RSI_MIN"] = pe.get("rsi_min", 35)
-    cfg["PULLBACK_RSI_MAX"] = pe.get("rsi_max", 60)
-
-    # AI
-    ai = scr.get("ai", {})
-    cfg["AI_API_KEY"] = ai.get("api_key", "")
-    cfg["AI_BASE_URL"] = ai.get("base_url", "https://api.openai.com/v1")
-    cfg["AI_MODEL"] = ai.get("model", "gpt-4o-mini")
-    cfg["AI_MAX_PICKS_TO_SUMMARIZE"] = ai.get("max_picks", 10)
-
-    # Trading section (for shared config)
-    trading = raw.get("trading", {})
-    for key, val in trading.items():
-        cfg[key.upper()] = val
-
-    return cfg
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 
-def load_config() -> dict:`n    import sys`n    import os`n    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`n    if config_dir not in sys.path:`n        sys.path.append(config_dir)`n
-    """Load config.yaml first, fall back to screen_config.py / screen_config.example.py."""
-    # Try YAML first
-    yaml_cfg = _load_yaml_config("config/config.yaml")
-    if yaml_cfg:
-        return yaml_cfg
+def _merge_dicts(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
-    # Fall back to Python config
-    config = {}
-    config_file = "screen_config.py"
-    if not os.path.exists(config_file):
-        config_file = "screen_config.example.py"
-        if not os.path.exists(config_file):
-            print("ERROR: No config.yaml, screen_config.py, or screen_config.example.py found.")
-            print("Copy config.example.yaml to config.yaml, or screen_config.example.py to screen_config.py.")
-            sys.exit(1)
-    with open(config_file, "r") as f:
-        exec(f.read(), config)
-    return config
+
+def load_config() -> dict:
+    """Load shared YAML config, overlaying local values onto example defaults."""
+    defaults = _load_yaml_config("config/config.example.yaml")
+    active = _load_yaml_config("config/config.yaml")
+    merged = _merge_dicts(defaults, active)
+    if not merged:
+        print("ERROR: config/config.example.yaml is missing or unreadable.")
+        sys.exit(1)
+    return _flatten_config(merged)
 
 
 # ── Data Validation ─────────────────────────────────────────────

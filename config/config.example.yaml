@@ -2,8 +2,8 @@
 # YfinanceDownloader — Unified Configuration
 # ============================================================================
 # Copy this file to config.yaml and edit to your preferences.
-# This single file replaces config.py, screen_config.py, and trade_config.py.
-# If config.yaml exists, it takes priority. Python config files still work as fallback.
+# This is the single canonical config file for the project.
+# Legacy config/config.py is still accepted as a downloader fallback only.
 #
 # Tip: You only need to set the values you want to change — everything has defaults.
 
@@ -16,7 +16,7 @@ data:
   hourly_csv: "data/prices_hourly.csv"
   nasdaq_screener: "data/nasdaq_screener.csv"
   batch_size: 50                 # Tickers per download batch
-  stale_ticker_days: 5           # Skip tickers with no data in this many days
+  stale_ticker_days: 5           # Flag tickers for backfill after this many stale days
   hourly_max_days: 729           # Yahoo Finance hourly data limit (~2 years)
 
 # ── Stock Screener Settings ─────────────────────────────────────

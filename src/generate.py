@@ -12,7 +12,14 @@ Usage:
     python generate.py --stale-days 5                   # Skip tickers stale > 5 days
 """
 
-import argparse`nimport sys`nimport os`nconfig_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")`nif config_dir not in sys.path:`n    sys.path.append(config_dir)
+import argparse
+import sys
+import os
+
+config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+if config_dir not in sys.path:
+    sys.path.append(config_dir)
+
 from datetime import timedelta
 
 import numpy as np
