@@ -6,28 +6,22 @@ echo   YFINANCE TRADER - Alpaca Paper / Live Execution
 echo ============================================================
 echo.
 
-:: Check for trade_config.py
-if not exist trade_config.py (
-    echo   trade_config.py not found!
+cd /d "%~dp0"
+
+:: Check for config
+if not exist "config\config.yaml" (
+    echo   config\config.yaml not found.
     echo.
-    echo   FIRST-TIME SETUP:
-    echo   1. Copy trade_config.example.py to trade_config.py
-    echo   2. Sign up at https://app.alpaca.markets/signup  (free)
-    echo   3. Go to Paper Trading ^> API Keys ^> Generate New Key
-    echo   4. Paste your API Key and Secret Key into trade_config.py
-    echo.
-    echo   Then run this batch file again.
-    echo.
-    copy trade_config.example.py trade_config.py >nul 2>&1
-    echo   (Created trade_config.py for you - just add your keys)
+    echo   Run run_gui.bat first, or copy config\config.example.yaml to config\config.yaml
+    echo   and add your Alpaca API keys under the trading section.
     echo.
     pause
     exit /b
 )
 
 :: Check for screener results
-if not exist screener_results.csv (
-    echo   No screener_results.csv found.
+if not exist "data\screener_results.csv" (
+    echo   No data\screener_results.csv found.
     echo   Run the screener first: double-click screen.bat
     echo.
     pause

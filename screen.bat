@@ -4,7 +4,7 @@
 ::  Double-click this file to score all stocks and find
 ::  today's top trade candidates.
 ::
-::  Requires: daily_features.parquet (run generate.bat first)
+::  Requires: data\daily_features.parquet (run generate.bat first)
 :: ============================================================
 
 echo ============================================================
@@ -14,15 +14,15 @@ echo.
 
 cd /d "%~dp0"
 
-if not exist "daily_features.parquet" (
-    echo  ERROR: daily_features.parquet not found.
+if not exist "data\daily_features.parquet" (
+    echo  ERROR: data\daily_features.parquet not found.
     echo  Run generate.bat first to create the features file.
     echo.
     pause
     exit /b 1
 )
 
-set /p USE_AI="Enable AI trade summaries? Requires API key in screen_config.py (Y/N): "
+set /p USE_AI="Enable AI trade summaries? Requires API key in config\config.yaml (Y/N): "
 if /I "%USE_AI%"=="Y" (
     python src/screener.py --ai
 ) else (
@@ -31,6 +31,6 @@ if /I "%USE_AI%"=="Y" (
 
 echo.
 echo ============================================================
-echo  Results saved to screener_results.csv
+echo  Results saved to data\screener_results.csv
 echo ============================================================
 pause
